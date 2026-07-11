@@ -1,10 +1,64 @@
-# OSX
-#
-.DS_Store
+# ============================================================
+# SENSITIVE / CREDENTIALS (JANGAN PERNAH DI-PUSH!)
+# ============================================================
 
-# Xcode
-#
-build/
+# Firebase config (berisi API Key & project credentials)
+google-services.json
+GoogleService-Info.plist
+
+# Keystore files (production signing keys)
+*.keystore
+!debug.keystore
+*.jks
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# ============================================================
+# OPERATING SYSTEM
+# ============================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ============================================================
+# ANDROID
+# ============================================================
+
+# Gradle build outputs & caches
+android/build/
+android/app/build/
+android/.gradle/
+android/.kotlin/
+android/.cxx/
+android/app/.cxx/
+*.iml
+
+# Local machine properties (berisi path SDK lokal)
+android/local.properties
+
+# IntelliJ / Android Studio
+.idea/
+
+# Proguard generated files
+android/app/src/main/assets/react/
+
+# ============================================================
+# iOS / XCODE
+# ============================================================
+
+# Xcode build artifacts
+ios/build/
+ios/DerivedData/
 *.pbxuser
 !default.pbxuser
 *.mode1v3
@@ -13,63 +67,71 @@ build/
 !default.mode2v3
 *.perspectivev3
 !default.perspectivev3
-xcuserdata
+xcuserdata/
 *.xccheckout
 *.moved-aside
-DerivedData
-*.hmap
-*.ipa
 *.xcuserstate
 **/.xcode.env.local
 
-# Android/IntelliJ
-#
-build/
-.idea
-.gradle
-local.properties
-*.iml
-*.hprof
-.cxx/
-*.keystore
-!debug.keystore
-.kotlin/
+# CocoaPods (generated, bisa di-restore dengan pod install)
+ios/Pods/
 
-# node.js
-#
+# ============================================================
+# NODE / REACT NATIVE
+# ============================================================
+
+# Node modules (bisa di-restore dengan npm install)
 node_modules/
+
+# Logs
 npm-debug.log
 yarn-error.log
+*.log
 
-# fastlane
-#
-# It is recommended to not store the screenshots in the git repo. Instead, use fastlane to re-generate the
-# screenshots whenever they are needed.
-# For more information about the recommended setup visit:
-# https://docs.fastlane.tools/best-practices/source-control/
+# Bundle artifacts
+*.jsbundle
+
+# Metro bundler
+.metro-health-check*
+
+# ============================================================
+# TESTING & COVERAGE
+# ============================================================
+
+/coverage
+*.hprof
+
+# ============================================================
+# FASTLANE
+# ============================================================
 
 **/fastlane/report.xml
 **/fastlane/Preview.html
 **/fastlane/screenshots
 **/fastlane/test_output
 
-# Bundle artifact
-*.jsbundle
+# ============================================================
+# RUBY / BUNDLER
+# ============================================================
 
-# Ruby / CocoaPods
-**/Pods/
 /vendor/bundle/
 
-# Temporary files created by Metro to check the health of the file watcher
-.metro-health-check*
+# ============================================================
+# YARN
+# ============================================================
 
-# testing
-/coverage
-
-# Yarn
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# ============================================================
+# FILE CATATAN LOKAL (tidak relevan untuk repo)
+# ============================================================
+
+error.txt
+rules.txt
+field.txt
+*.txt
