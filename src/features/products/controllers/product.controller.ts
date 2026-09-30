@@ -5,6 +5,8 @@ import {
   query,
   where,
   getDocs,
+  doc,
+  setDoc,
 } from '@react-native-firebase/firestore';
 import { Product, ProductCategory } from '../models/Product.model';
 
@@ -17,6 +19,14 @@ import { Product, ProductCategory } from '../models/Product.model';
  * - State management untuk loading & error
  */
 
+export type ProductSortOption =
+  | 'newest'
+  | 'oldest'
+  | 'name_asc'
+  | 'name_desc'
+  | 'price_low'
+  | 'price_high';
+
 export interface ProductState {
   products: Product[];
   filtered: Product[];
@@ -28,19 +38,42 @@ export interface ProductState {
 export interface ProductActions {
   fetchProducts: () => Promise<void>;
   onRefresh: () => void;
-  applyFilter: (search: string, category: ProductCategory) => void;
+  applyFilter: (
+    search: string,
+    category: ProductCategory,
+    sortBy?: ProductSortOption,
+  ) => void;
+  addProduct: (
+    newProductData: {
+      name: string;
+      category: ProductCategory;
+      price: number;
+      stock: number;
+      description: string;
+      imageUrl: string;
+      whatsappLink: string;
+    },
+    userUid: string,
+  ) => Promise<boolean>;
 }
 
+// Cache produk di level modul
+let cachedProducts: Product[] = [];
+let isProductsLoaded = false;
+
 export const useProductController = (): [ProductState, ProductActions] => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [filtered, setFiltered] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>(cachedProducts);
+  const [filtered, setFiltered] = useState<Product[]>(cachedProducts);
+  const [loading, setLoading] = useState(!isProductsLoaded);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchProducts = useCallback(async () => {
     try {
       setError(null);
+      if (!isProductsLoaded) {
+        setLoading(true);
+      }
 
       // ✅ Modular API v22 — tidak ada deprecation warning
       const db = getFirestore();
@@ -48,10 +81,13 @@ export const useProductController = (): [ProductState, ProductActions] => {
       const q = query(productsRef, where('approved', '==', true));
       const snapshot = await getDocs(q);
 
-      const data: Product[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
+      const data: Product[] = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data(),
       })) as Product[];
+
+      cachedProducts = data;
+      isProductsLoaded = true;
 
       setProducts(data);
       setFiltered(data);
@@ -71,11 +107,15 @@ export const useProductController = (): [ProductState, ProductActions] => {
   }, [fetchProducts]);
 
   /**
-   * Terapkan filter kategori + pencarian teks secara bersamaan
+   * Terapkan filter kategori, pencarian teks, dan pengurutan
    */
   const applyFilter = useCallback(
-    (search: string, category: ProductCategory) => {
-      let result = products;
+    (
+      search: string,
+      category: ProductCategory,
+      sortBy: ProductSortOption = 'newest',
+    ) => {
+      let result = [...products];
 
       if (category !== 'Semua') {
         result = result.filter(p => p.category === category);
@@ -91,9 +131,93 @@ export const useProductController = (): [ProductState, ProductActions] => {
         );
       }
 
+      // Pengurutan (Sorting)
+      result.sort((a, b) => {
+        switch (sortBy) {
+          case 'oldest':
+            return (a.createdAt || 0) - (b.createdAt || 0);
+          case 'name_asc':
+            return a.name.localeCompare(b.name);
+          case 'name_desc':
+            return b.name.localeCompare(a.name);
+          case 'price_low':
+            return a.price - b.price;
+          case 'price_high':
+            return b.price - a.price;
+          case 'newest':
+          default:
+            return (b.createdAt || 0) - (a.createdAt || 0);
+        }
+      });
+
       setFiltered(result);
     },
     [products],
+  );
+
+  /**
+   * Tambah produk baru ke Firestore
+   */
+  const addProduct = useCallback(
+    async (
+      newProductData: {
+        name: string;
+        category: ProductCategory;
+        price: number;
+        stock: number;
+        description: string;
+        imageUrl: string;
+        whatsappLink: string;
+      },
+      userUid: string,
+    ): Promise<boolean> => {
+      try {
+        const db = getFirestore();
+        const timestamp = Date.now();
+        const docId = `product_${timestamp}`;
+        const newProductRef = doc(db, 'products', docId);
+
+        // Format whatsapp link jika tidak diawali http/https
+        let waLink = newProductData.whatsappLink.trim();
+        if (waLink && !waLink.startsWith('http')) {
+          // Jika diinput nomor misal 08123456789 -> https://wa.me/628123456789
+          let cleanNum = waLink.replace(/\D/g, '');
+          if (cleanNum.startsWith('0')) {
+            cleanNum = '62' + cleanNum.slice(1);
+          }
+          waLink = `https://wa.me/${cleanNum}?text=Halo%2C+saya+tertarik+membeli+${encodeURIComponent(
+            newProductData.name,
+          )}`;
+        }
+
+        const productPayload: Product = {
+          id: docId,
+          name: newProductData.name.trim(),
+          category: newProductData.category,
+          price: Number(newProductData.price),
+          stock: Number(newProductData.stock),
+          description: newProductData.description.trim(),
+          imageUrl:
+            newProductData.imageUrl.trim() ||
+            'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60',
+          whatsappLink: waLink,
+          approved: false, // Menunggu persetujuan admin (pending review)
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          createdBy: userUid,
+        };
+
+        await setDoc(newProductRef, productPayload);
+
+        // Segarkan list produk
+        await fetchProducts();
+        return true;
+      } catch (err) {
+        console.error('[ProductController] addProduct error:', err);
+        return false;
+      }
+    },
+    [fetchProducts],
   );
 
   const state: ProductState = {
@@ -108,6 +232,7 @@ export const useProductController = (): [ProductState, ProductActions] => {
     fetchProducts,
     onRefresh,
     applyFilter,
+    addProduct,
   };
 
   return [state, actions];

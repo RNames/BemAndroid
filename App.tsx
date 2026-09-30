@@ -1,6 +1,9 @@
 import React from 'react';
+import { LogBox } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
+
+LogBox.ignoreLogs(['This method is deprecated']);
 
 /**
  * App Entry Point

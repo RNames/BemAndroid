@@ -11,10 +11,13 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Product } from '../../models/Product.model';
 import { Colors } from '../../../../shared/constants/colors';
+import { Fonts } from '../../../../shared/constants/fonts';
 import { formatPrice } from '../../../../shared/utils/format.utils';
+import { useTranslation } from '../../../../shared/localization';
+import ArrowLeftIcon from '../../../../assets/icons/arrow_left.svg';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +33,8 @@ interface Props {
  * - Tombol WhatsApp untuk menghubungi penjual
  */
 const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
+  const insets = useSafeAreaInsets();
+  const { t, translateCategory } = useTranslation();
   const isOutOfStock = product.stock <= 0;
 
   const handleWhatsApp = async () => {
@@ -39,15 +44,32 @@ const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
       await Linking.openURL(url);
     } catch {
       Alert.alert(
-        'Gagal Membuka WhatsApp',
-        'Pastikan WhatsApp sudah terinstall dan link penjual valid.',
+        t.common.error,
+        'Please ensure WhatsApp is installed and the seller link is valid.',
       );
     }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor="transparent" translucent barStyle="light-content" />
+      <StatusBar backgroundColor={Colors.white} barStyle="dark-content" />
+
+      {/* ─── Top Appbar Putih ────────────────────── */}
+      <View style={styles.appBar}>
+        <TouchableOpacity
+          style={styles.appBarBackBtn}
+          onPress={onBack}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <ArrowLeftIcon width={22} height={22} fill="#0F172A" />
+        </TouchableOpacity>
+
+        <Text style={styles.appBarTitle}>{t.products.productDetails}</Text>
+
+        {/* Placeholder penyeimbang layout kanan */}
+        <View style={styles.appBarRightSpacer} />
+      </View>
 
       <ScrollView style={styles.scroll} bounces={false} showsVerticalScrollIndicator={false}>
 
@@ -59,15 +81,10 @@ const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
             resizeMode="cover"
           />
 
-          {/* Tombol Kembali */}
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-
           {/* Overlay Stok Habis */}
           {isOutOfStock && (
             <View style={styles.outOfStockOverlay}>
-              <Text style={styles.outOfStockText}>STOK HABIS</Text>
+              <Text style={styles.outOfStockText}>{t.products.outOfStockBadge}</Text>
             </View>
           )}
         </View>
@@ -78,16 +95,16 @@ const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
           {/* Kategori */}
           <View style={styles.categoryRow}>
             <View style={styles.categoryPill}>
-              <Text style={styles.categoryPillText}>🏷️ {product.category}</Text>
+              <Text style={styles.categoryPillText}>{translateCategory(product.category)}</Text>
             </View>
           </View>
 
           {/* Nama Produk */}
           <Text style={styles.productName}>{product.name}</Text>
 
-          {/* Harga */}
+          {/* Price */}
           <View style={styles.priceBox}>
-            <Text style={styles.priceLabel}>Harga</Text>
+            <Text style={styles.priceLabel}>{t.products.price}</Text>
             <Text style={styles.priceValue}>{formatPrice(product.price)}</Text>
           </View>
 
@@ -96,47 +113,44 @@ const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
           {/* ─── Info Grid ───────────────────────── */}
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
-              <Text style={styles.infoIcon}>📦</Text>
-              <Text style={styles.infoLabel}>Stok</Text>
+              <Text style={styles.infoLabel}>{t.products.stock}</Text>
               <Text style={[styles.infoValue, isOutOfStock && styles.infoValueRed]}>
-                {isOutOfStock ? 'Habis' : `${product.stock} pcs`}
+                {isOutOfStock ? t.products.outOfStock : `${product.stock} pcs`}
               </Text>
             </View>
             <View style={styles.infoItem}>
-              <Text style={styles.infoIcon}>🏪</Text>
-              <Text style={styles.infoLabel}>Kategori</Text>
+              <Text style={styles.infoLabel}>{t.products.category}</Text>
               <Text style={styles.infoValue} numberOfLines={2}>
-                {product.category}
+                {translateCategory(product.category)}
               </Text>
             </View>
             <View style={styles.infoItem}>
-              <Text style={styles.infoIcon}>✅</Text>
-              <Text style={styles.infoLabel}>Status</Text>
+              <Text style={styles.infoLabel}>{t.products.status}</Text>
               <Text style={[styles.infoValue, styles.infoValueGreen]}>
-                {product.approved ? 'Aktif' : 'Tidak Aktif'}
+                {product.approved ? t.products.active : t.products.pending}
               </Text>
             </View>
           </View>
 
           <View style={styles.divider} />
 
-          {/* ─── Deskripsi ───────────────────────── */}
+          {/* ─── Description ───────────────────────── */}
           <View style={styles.descSection}>
-            <Text style={styles.descTitle}>📝 Deskripsi Produk</Text>
+            <Text style={styles.descTitle}>{t.products.description}</Text>
             <Text style={styles.descText}>
-              {product.description?.trim() || 'Belum ada deskripsi untuk produk ini.'}
+              {product.description?.trim() || t.products.noDescription}
             </Text>
           </View>
 
           {/* Spacer untuk floating button */}
-          <View style={{ height: 120 }} />
+          <View style={{ height: insets.bottom + 110 }} />
         </View>
       </ScrollView>
 
-      {/* ─── Floating WhatsApp Button ──────────────── */}
-      <View style={styles.bottomBar}>
+      {/* ─── Floating WhatsApp Button dengan Safe Area Bottom Inset ─── */}
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom + 12, 20) }]}>
         <View style={styles.bottomPriceContainer}>
-          <Text style={styles.bottomPriceLabel}>Total</Text>
+          <Text style={styles.bottomPriceLabel}>{t.products.price}</Text>
           <Text style={styles.bottomPrice}>{formatPrice(product.price)}</Text>
         </View>
 
@@ -148,7 +162,7 @@ const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
         >
           <Text style={styles.waIcon}>💬</Text>
           <Text style={styles.waButtonText}>
-            {isOutOfStock ? 'Stok Habis' : 'Hubungi Penjual'}
+            {isOutOfStock ? t.products.outOfStock : t.products.contactSeller}
           </Text>
         </TouchableOpacity>
       </View>
@@ -159,9 +173,38 @@ const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.white,
   },
-  scroll: { flex: 1 },
+  appBar: {
+    height: 56,
+    backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  appBarBackBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  appBarTitle: {
+    fontFamily: Fonts.bold,
+    fontSize: 18,
+    color: Colors.textPrimary,
+  },
+  appBarRightSpacer: {
+    width: 40,
+  },
+  scroll: { flex: 1, backgroundColor: Colors.background },
 
   // Hero
   heroContainer: {
@@ -170,23 +213,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   heroImage: { width: '100%', height: '100%' },
-  backButton: {
-    position: 'absolute',
-    top: 52,
-    left: 16,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-  },
-  backIcon: { fontSize: 20, color: Colors.textPrimary, fontWeight: '700' },
   outOfStockOverlay: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
@@ -195,9 +221,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   outOfStockText: {
+    fontFamily: Fonts.extraBold,
     color: Colors.white,
     fontSize: 28,
-    fontWeight: '900',
     letterSpacing: 3,
   },
 
@@ -223,10 +249,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
   },
-  categoryPillText: { color: Colors.primary, fontSize: 13, fontWeight: '700' },
+  categoryPillText: { fontFamily: Fonts.bold, color: Colors.primary, fontSize: 13 },
   productName: {
+    fontFamily: Fonts.bold,
     fontSize: 24,
-    fontWeight: '800',
     color: Colors.textPrimary,
     lineHeight: 32,
     letterSpacing: -0.5,
@@ -244,8 +270,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.primaryBorder,
   },
-  priceLabel: { fontSize: 14, color: Colors.textSecondary, fontWeight: '500' },
-  priceValue: { fontSize: 22, fontWeight: '800', color: Colors.primary },
+  priceLabel: { fontFamily: Fonts.medium, fontSize: 14, color: Colors.textSecondary },
+  priceValue: { fontFamily: Fonts.bold, fontSize: 22, color: Colors.primary },
   divider: { height: 1, backgroundColor: Colors.divider, marginVertical: 20 },
 
   // Info Grid
@@ -253,20 +279,20 @@ const styles = StyleSheet.create({
   infoItem: { alignItems: 'center', flex: 1, gap: 4 },
   infoIcon: { fontSize: 24, marginBottom: 4 },
   infoLabel: {
+    fontFamily: Fonts.medium,
     fontSize: 11,
     color: Colors.textMuted,
-    fontWeight: '500',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  infoValue: { fontSize: 13, color: Colors.textPrimary, fontWeight: '700', textAlign: 'center' },
+  infoValue: { fontFamily: Fonts.bold, fontSize: 13, color: Colors.textPrimary, textAlign: 'center' },
   infoValueRed: { color: Colors.danger },
   infoValueGreen: { color: Colors.primary },
 
   // Description
   descSection: { gap: 10 },
-  descTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
-  descText: { fontSize: 14, color: Colors.textSecondary, lineHeight: 22 },
+  descTitle: { fontFamily: Fonts.bold, fontSize: 16, color: Colors.textPrimary },
+  descText: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textSecondary, lineHeight: 22 },
 
   // Bottom Bar
   bottomBar: {
@@ -288,8 +314,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   bottomPriceContainer: { flex: 1 },
-  bottomPriceLabel: { fontSize: 11, color: Colors.textMuted, marginBottom: 2 },
-  bottomPrice: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary },
+  bottomPriceLabel: { fontFamily: Fonts.regular, fontSize: 11, color: Colors.textMuted, marginBottom: 2 },
+  bottomPrice: { fontFamily: Fonts.bold, fontSize: 18, color: Colors.textPrimary },
   waButton: {
     flex: 2,
     backgroundColor: Colors.whatsapp,
@@ -307,7 +333,7 @@ const styles = StyleSheet.create({
   },
   waButtonDisabled: { backgroundColor: Colors.stockEmpty, shadowColor: 'transparent' },
   waIcon: { fontSize: 18 },
-  waButtonText: { color: Colors.white, fontSize: 15, fontWeight: '800' },
+  waButtonText: { fontFamily: Fonts.bold, color: Colors.white, fontSize: 15 },
 });
 
 export default ProductDetailScreen;

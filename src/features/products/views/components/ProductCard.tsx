@@ -1,18 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   Image,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Product } from '../../models/Product.model';
 import { Colors } from '../../../../shared/constants/colors';
+import { Fonts } from '../../../../shared/constants/fonts';
 import { formatPrice } from '../../../../shared/utils/format.utils';
-
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 2;
+import { useTranslation } from '../../../../shared/localization';
 
 interface Props {
   product: Product;
@@ -21,36 +20,52 @@ interface Props {
 
 /**
  * ProductCard View Component
- * Menampilkan satu produk dalam grid dengan gambar, kategori, nama, harga, stok
+ * Menampilkan produk dalam grid 2 kolom dengan ukuran responsif dinamis
  */
 const ProductCard: React.FC<Props> = ({ product, onPress }) => {
+  const { width } = useWindowDimensions();
+  const { t, translateCategory } = useTranslation();
+  // 16 padding samping kanan & kiri (total 32) + 12 gap antar kolom = 44
+  const cardWidth = Math.max(140, Math.floor((width - 44) / 2));
+  const [imageError, setImageError] = useState(false);
+
   const isOutOfStock = product.stock <= 0;
+  const hasImage = Boolean(product.imageUrl) && !imageError;
 
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, { width: cardWidth }]}
       onPress={() => onPress(product)}
       activeOpacity={0.85}
     >
       {/* Gambar Produk */}
-      <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: product.imageUrl }}
-          style={styles.image}
-          resizeMode="cover"
-        />
+      <View style={[styles.imageContainer, { height: Math.floor(cardWidth * 0.95) }]}>
+        {hasImage ? (
+          <Image
+            source={{ uri: product.imageUrl }}
+            style={styles.image}
+            resizeMode="cover"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <View style={styles.imagePlaceholder}>
+            <Text style={styles.imagePlaceholderText}>
+              {t.common.photoPlaceholderProduct}
+            </Text>
+          </View>
+        )}
 
-        {/* Badge Stok Habis */}
+        {/* Badge Out of Stock */}
         {isOutOfStock && (
           <View style={styles.stockBadge}>
-            <Text style={styles.stockBadgeText}>Habis</Text>
+            <Text style={styles.stockBadgeText}>{t.products.outOfStock}</Text>
           </View>
         )}
 
         {/* Badge Kategori */}
         <View style={styles.categoryBadge}>
           <Text style={styles.categoryBadgeText} numberOfLines={1}>
-            {product.category}
+            {translateCategory(product.category)}
           </Text>
         </View>
       </View>
@@ -66,7 +81,7 @@ const ProductCard: React.FC<Props> = ({ product, onPress }) => {
         <View style={styles.stockRow}>
           <View style={[styles.stockDot, isOutOfStock && styles.stockDotEmpty]} />
           <Text style={[styles.stockText, isOutOfStock && styles.stockTextEmpty]}>
-            {isOutOfStock ? 'Stok habis' : `Stok: ${product.stock}`}
+            {isOutOfStock ? t.products.outOfStock : `${t.products.stock}: ${product.stock}`}
           </Text>
         </View>
       </View>
@@ -76,25 +91,38 @@ const ProductCard: React.FC<Props> = ({ product, onPress }) => {
 
 const styles = StyleSheet.create({
   card: {
-    width: CARD_WIDTH,
     backgroundColor: Colors.cardBg,
     borderRadius: 16,
-    marginBottom: 16,
+    marginBottom: 14,
     overflow: 'hidden',
-    elevation: 4,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   imageContainer: {
     position: 'relative',
     width: '100%',
-    height: CARD_WIDTH * 0.9,
+    backgroundColor: '#F1F5F9',
   },
   image: {
     width: '100%',
     height: '100%',
+  },
+  imagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagePlaceholderText: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 12,
+    color: Colors.textMuted,
   },
   stockBadge: {
     position: 'absolute',
@@ -104,40 +132,42 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
+    zIndex: 2,
   },
   stockBadgeText: {
+    fontFamily: Fonts.bold,
     color: Colors.white,
     fontSize: 10,
-    fontWeight: '700',
   },
   categoryBadge: {
     position: 'absolute',
     bottom: 8,
     left: 8,
-    backgroundColor: 'rgba(30,30,60,0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    maxWidth: CARD_WIDTH - 24,
+    maxWidth: '85%',
   },
   categoryBadgeText: {
+    fontFamily: Fonts.semiBold,
     color: Colors.white,
     fontSize: 10,
-    fontWeight: '600',
   },
   info: {
-    padding: 12,
+    padding: 10,
   },
   name: {
+    fontFamily: Fonts.bold,
     fontSize: 13,
-    fontWeight: '700',
     color: Colors.textPrimary,
-    marginBottom: 6,
+    marginBottom: 4,
     lineHeight: 18,
+    minHeight: 36, // Menjaga keseragaman tinggi baris produk
   },
   price: {
+    fontFamily: Fonts.bold,
     fontSize: 14,
-    fontWeight: '800',
     color: Colors.primary,
     marginBottom: 6,
   },
@@ -156,6 +186,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.stockEmpty,
   },
   stockText: {
+    fontFamily: Fonts.medium,
     fontSize: 11,
     color: Colors.textSecondary,
   },
