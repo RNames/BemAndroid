@@ -42,7 +42,6 @@ android/.kotlin/
 android/.cxx/
 android/app/.cxx/
 *.iml
-*.apk
 
 # Local machine properties (berisi path SDK lokal)
 android/local.properties
