@@ -67,13 +67,36 @@ export const useEventController = (): [EventState, EventActions] => {
 
       const db = getFirestore();
       const eventsRef = collection(db, 'events');
-      const q = query(eventsRef, where('approved', '==', true));
-      const snapshot = await getDocs(q);
+      const snapshot = await getDocs(eventsRef);
 
-      const data: EventItem[] = snapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      })) as EventItem[];
+      const parseTs = (val: any): number => {
+        if (!val) return Date.now();
+        if (typeof val === 'number') return val;
+        if (typeof val.toMillis === 'function') return val.toMillis();
+        if (typeof val.toDate === 'function') return val.toDate().getTime();
+        if (typeof val.seconds === 'number') return val.seconds * 1000;
+        const n = Number(val);
+        return isNaN(n) ? Date.now() : n;
+      };
+
+      const data: EventItem[] = snapshot.docs.map(docSnap => {
+        const raw = docSnap.data();
+        return {
+          id: docSnap.id,
+          title: String(raw.title || ''),
+          category: String(raw.category || 'Lainnya'),
+          organizer: String(raw.organizer || ''),
+          location: String(raw.location || ''),
+          description: String(raw.description || ''),
+          imageUrl: String(raw.imageUrl || ''),
+          date: parseTs(raw.date),
+          endDate: raw.endDate ? parseTs(raw.endDate) : undefined,
+          createdAt: parseTs(raw.createdAt),
+          updatedAt: parseTs(raw.updatedAt),
+          approved: Boolean(raw.approved),
+          createdBy: String(raw.createdBy || ''),
+        };
+      });
 
       // Urutkan acara berdasarkan tanggal terdekat lebih dulu
       data.sort((a, b) => a.date - b.date);

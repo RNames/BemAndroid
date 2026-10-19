@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -17,12 +17,6 @@ import { ProfileSkeleton } from '../../../../shared/components/Skeleton';
 import { useTranslation } from '../../../../shared/localization';
 import ArrowRightIcon from '../../../../assets/icons/arrow_right.svg';
 import EditProfileModal from '../components/EditProfileModal';
-import AppUpdateModal from '../../../../shared/components/AppUpdateModal';
-import { APP_VERSION } from '../../../../shared/constants/appVersion';
-import {
-  checkAppUpdate,
-  VersionCheckResult,
-} from '../../../../shared/services/version.service';
 
 interface Props {
   onOpenLogin: () => void;
@@ -40,7 +34,6 @@ interface Props {
  * - Edit Profile feature (Name & Photo) via EditProfileModal
  * - Container 1: Account Information to Language in 1 card with dividers (10px margin from phone border)
  * - Container 2: Delete Data, Clear Cache, and Sign Out in 1 card with red text
- * - Debug Button: "Check for Updates" connects to real Firestore /app_config/version data
  */
 const UserProfileScreen: React.FC<Props> = ({
   onOpenLogin,
@@ -55,27 +48,6 @@ const UserProfileScreen: React.FC<Props> = ({
   const [authState, authActions] = useAuthController();
   const { user, userProfile } = authState;
   const [editProfileModalVisible, setEditProfileModalVisible] = useState(false);
-  const [updateModalVisible, setUpdateModalVisible] = useState(false);
-  const [updateResult, setUpdateResult] = useState<VersionCheckResult | null>(null);
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
-
-  // Fetch real version data from Firestore on mount
-  useEffect(() => {
-    checkAppUpdate().then(res => setUpdateResult(res));
-  }, []);
-
-  const handleCheckUpdates = async () => {
-    try {
-      setCheckingUpdate(true);
-      const res = await checkAppUpdate();
-      setUpdateResult(res);
-      setUpdateModalVisible(true);
-    } catch {
-      Alert.alert(t.common.error, 'Failed to fetch update info from Firestore.');
-    } finally {
-      setCheckingUpdate(false);
-    }
-  };
 
   const handleSignOutConfirm = () => {
     Alert.alert(
@@ -323,26 +295,6 @@ const UserProfileScreen: React.FC<Props> = ({
             })}
           </View>
 
-          {/* ─── Debug Button: Check for Updates ─── */}
-          <TouchableOpacity
-            style={styles.debugUpdateBtn}
-            onPress={handleCheckUpdates}
-            activeOpacity={0.75}
-            disabled={checkingUpdate}
-          >
-            <Text style={styles.debugUpdateIcon}>🚀</Text>
-            <View style={styles.debugUpdateTextGroup}>
-              <Text style={styles.debugUpdateTitle}>{t.profile.checkUpdates} (Debug)</Text>
-              <Text style={styles.debugUpdateSubtitle}>
-                {checkingUpdate
-                  ? t.common.loading
-                  : `${t.appUpdate.currentVersion} v${APP_VERSION} • ${t.appUpdate.latestVersion} v${
-                      updateResult?.latestVersion || APP_VERSION
-                    }`}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
           {/* ─── Edit Profile Modal ───────────────────────────── */}
           <EditProfileModal
             visible={editProfileModalVisible}
@@ -370,45 +322,8 @@ const UserProfileScreen: React.FC<Props> = ({
           >
             <Text style={styles.loginBtnText}>{t.profile.loginGoogle}</Text>
           </TouchableOpacity>
-
-          {/* Debug Button for guest as well */}
-          <TouchableOpacity
-            style={[styles.debugUpdateBtn, { marginTop: 24, width: '100%' }]}
-            onPress={handleCheckUpdates}
-            activeOpacity={0.75}
-            disabled={checkingUpdate}
-          >
-            <Text style={styles.debugUpdateIcon}>🚀</Text>
-            <View style={styles.debugUpdateTextGroup}>
-              <Text style={styles.debugUpdateTitle}>{t.profile.checkUpdates} (Debug)</Text>
-              <Text style={styles.debugUpdateSubtitle}>
-                {checkingUpdate
-                  ? t.common.loading
-                  : `${t.appUpdate.currentVersion} v${APP_VERSION} • ${t.appUpdate.latestVersion} v${
-                      updateResult?.latestVersion || APP_VERSION
-                    }`}
-              </Text>
-            </View>
-          </TouchableOpacity>
         </View>
       )}
-
-      {/* ─── App Update Modal (Real Firestore Data) ─────────── */}
-      <AppUpdateModal
-        visible={updateModalVisible}
-        onClose={() => setUpdateModalVisible(false)}
-        latestVersion={updateResult?.latestVersion || APP_VERSION}
-        currentVersion={APP_VERSION}
-        downloadUrl={
-          updateResult?.downloadUrl ||
-          'https://risetbemgtd2026.vercel.app/'
-        }
-        releaseNotes={
-          updateResult?.releaseNotes ||
-          'Pembaruan performa dan fitur terbaru aplikasi desa.'
-        }
-        forceUpdate={Boolean(updateResult?.forceUpdate)}
-      />
     </ScrollView>
   );
 };
@@ -537,37 +452,7 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F1F5F9',
   },
-  debugUpdateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
-    marginTop: 4,
-    marginBottom: 20,
-  },
-  debugUpdateIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  debugUpdateTextGroup: {
-    flex: 1,
-  },
-  debugUpdateTitle: {
-    fontFamily: Fonts.bold,
-    fontSize: 13,
-    color: Colors.primaryDark,
-  },
-  debugUpdateSubtitle: {
-    fontFamily: Fonts.regular,
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginTop: 1,
-  },
+
   guestCard: {
     backgroundColor: Colors.white,
     borderRadius: 20,

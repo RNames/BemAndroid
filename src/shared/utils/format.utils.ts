@@ -14,8 +14,12 @@ export const formatPrice = (price: number): string =>
  * Format timestamp (ms) ke tanggal lokal Indonesia
  * @example formatDate(1783528003153) → "11 Juli 2026"
  */
-export const formatDate = (timestamp: number): string => {
-  const date = new Date(timestamp);
+export const formatDate = (timestamp: number | string | any): string => {
+  const ts = typeof timestamp === 'number' ? timestamp : Number(timestamp) || Date.now();
+  const date = new Date(ts);
+  if (isNaN(date.getTime())) {
+    return '-';
+  }
   return date.toLocaleDateString('id-ID', {
     day: 'numeric',
     month: 'long',
@@ -43,8 +47,12 @@ export const truncateText = (text: string, maxLength: number): string => {
  * Format timestamp (ms) ke tanggal & waktu lokal Indonesia
  * @example formatDateTime(1783502880000) → "11 Jul 2026, 09.00 WIB"
  */
-export const formatDateTime = (timestamp: number): string => {
-  const date = new Date(timestamp);
+export const formatDateTime = (timestamp: number | string | any): string => {
+  const ts = typeof timestamp === 'number' ? timestamp : Number(timestamp) || Date.now();
+  const date = new Date(ts);
+  if (isNaN(date.getTime())) {
+    return '-';
+  }
   const dateStr = date.toLocaleDateString('id-ID', {
     day: 'numeric',
     month: 'short',
