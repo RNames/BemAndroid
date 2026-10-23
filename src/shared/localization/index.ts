@@ -9,8 +9,8 @@ const dictionaries: Record<LanguageCode, TranslationType> = {
   en,
 };
 
-// Default language: English (can be switched to Indonesian anytime)
-let currentLang: LanguageCode = 'en';
+// Default language: Indonesian (can be switched to English anytime)
+let currentLang: LanguageCode = 'id';
 const languageSubscribers = new Set<() => void>();
 
 function notifyLanguageSubscribers() {

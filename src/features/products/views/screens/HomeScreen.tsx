@@ -378,7 +378,7 @@ const HomeScreen: React.FC<Props> = ({
                 styles.productGrid,
                 {
                   paddingTop: TOTAL_HEADER_HEIGHT + 8,
-                  paddingBottom: insets.bottom + 85,
+                  paddingBottom: insets.bottom + 105,
                 },
               ]}
               columnWrapperStyle={styles.columnWrapper}
@@ -430,7 +430,7 @@ const HomeScreen: React.FC<Props> = ({
                 styles.eventList,
                 {
                   paddingTop: TOTAL_HEADER_HEIGHT + 8,
-                  paddingBottom: insets.bottom + 85,
+                  paddingBottom: insets.bottom + 105,
                 },
               ]}
               showsVerticalScrollIndicator={false}
@@ -470,7 +470,7 @@ const HomeScreen: React.FC<Props> = ({
       {/* ─── Floating Action Button (+) ─────────── */}
       {activeTab !== 'profile' && (
         <TouchableOpacity
-          style={[styles.fab, { bottom: insets.bottom + 65 }]}
+          style={[styles.fab, { bottom: insets.bottom + 85 }]}
           onPress={handleFabPress}
           activeOpacity={0.85}
         >

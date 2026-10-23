@@ -34,15 +34,15 @@ const LanguageScreen: React.FC<Props> = ({ onBack }) => {
 
   const languageOptions: LanguageOption[] = [
     {
-      id: 'en',
-      name: t.language.english,
-      nativeName: 'English (US)',
-      tag: t.language.defaultTag,
-    },
-    {
       id: 'id',
       name: t.language.indonesian,
       nativeName: 'Bahasa Indonesia',
+      tag: t.language.defaultTag,
+    },
+    {
+      id: 'en',
+      name: t.language.english,
+      nativeName: 'English (US)',
       tag: t.language.availableTag,
     },
   ];

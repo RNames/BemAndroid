@@ -72,7 +72,10 @@ const EventCard: React.FC<Props> = ({ event, onPress }) => {
 
         {/* Organizer */}
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>{t.events.organizer}:</Text>
+          <Text style={styles.infoLabel} numberOfLines={1}>
+            {t.events.organizer}
+          </Text>
+          <Text style={styles.colon}>:</Text>
           <Text style={styles.organizerBold} numberOfLines={1}>
             {event.organizer}
           </Text>
@@ -80,7 +83,10 @@ const EventCard: React.FC<Props> = ({ event, onPress }) => {
 
         {/* Schedule */}
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>{t.events.schedule}:</Text>
+          <Text style={styles.infoLabel} numberOfLines={1}>
+            {t.events.schedule}
+          </Text>
+          <Text style={styles.colon}>:</Text>
           <Text style={styles.scheduleText} numberOfLines={1}>
             {formatEventSchedule(event.date, event.endDate)}
           </Text>
@@ -88,7 +94,10 @@ const EventCard: React.FC<Props> = ({ event, onPress }) => {
 
         {/* Location */}
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>{t.events.location}:</Text>
+          <Text style={styles.infoLabel} numberOfLines={1}>
+            {t.events.location}
+          </Text>
+          <Text style={styles.colon}>:</Text>
           <Text style={styles.locationText} numberOfLines={1}>
             {event.location}
           </Text>
@@ -186,6 +195,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textMuted,
     width: 90,
+  },
+  colon: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 12,
+    color: Colors.textMuted,
   },
   organizerBold: {
     fontFamily: Fonts.bold,
