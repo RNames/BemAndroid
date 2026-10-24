@@ -34,6 +34,7 @@ export interface EventItem {
   location: string;
   description: string;
   imageUrl: string;
+  images?: string[];
   approved: boolean;
   createdAt: number;
   updatedAt: number;

@@ -42,8 +42,23 @@ export interface EventActions {
       location: string;
       description: string;
       imageUrl: string;
+      images?: string[];
     },
     userUid: string,
+  ) => Promise<boolean>;
+  updateEvent: (
+    eventId: string,
+    updatedData: {
+      title: string;
+      category: EventCategory;
+      organizer: string;
+      date: number;
+      endDate?: number;
+      location: string;
+      description: string;
+      imageUrl: string;
+      images?: string[];
+    },
   ) => Promise<boolean>;
 }
 
@@ -81,6 +96,10 @@ export const useEventController = (): [EventState, EventActions] => {
 
       const data: EventItem[] = snapshot.docs.map(docSnap => {
         const raw = docSnap.data();
+        const images: string[] = Array.isArray(raw.images) && raw.images.length > 0
+          ? raw.images
+          : (raw.imageUrl ? [String(raw.imageUrl)] : []);
+        const imageUrl: string = String(raw.imageUrl || images[0] || '');
         return {
           id: docSnap.id,
           title: String(raw.title || ''),
@@ -88,7 +107,8 @@ export const useEventController = (): [EventState, EventActions] => {
           organizer: String(raw.organizer || ''),
           location: String(raw.location || ''),
           description: String(raw.description || ''),
-          imageUrl: String(raw.imageUrl || ''),
+          imageUrl,
+          images,
           date: parseTs(raw.date),
           endDate: raw.endDate ? parseTs(raw.endDate) : undefined,
           createdAt: parseTs(raw.createdAt),
@@ -182,6 +202,7 @@ export const useEventController = (): [EventState, EventActions] => {
         location: string;
         description: string;
         imageUrl: string;
+        images?: string[];
       },
       userUid: string,
     ): Promise<boolean> => {
@@ -191,6 +212,13 @@ export const useEventController = (): [EventState, EventActions] => {
         const docId = `event_${timestamp}`;
         const newEventRef = doc(db, 'events', docId);
 
+        const images = newEventData.images && newEventData.images.length > 0
+          ? newEventData.images
+          : (newEventData.imageUrl ? [newEventData.imageUrl.trim()] : []);
+        const imageUrl = images[0] ||
+          newEventData.imageUrl.trim() ||
+          'https://images.unsplash.com/photo-1511578314322-379afb476865?w=600&auto=format&fit=crop&q=60';
+
         const eventPayload: Record<string, any> = {
           id: docId,
           title: newEventData.title.trim(),
@@ -199,9 +227,8 @@ export const useEventController = (): [EventState, EventActions] => {
           date: Number(newEventData.date),
           location: newEventData.location.trim(),
           description: newEventData.description.trim(),
-          imageUrl:
-            newEventData.imageUrl.trim() ||
-            'https://images.unsplash.com/photo-1511578314322-379afb476865?w=600&auto=format&fit=crop&q=60',
+          imageUrl,
+          images,
           approved: false, // Status pending/false menunggu ACC admin
           createdAt: timestamp,
           updatedAt: timestamp,
@@ -225,6 +252,62 @@ export const useEventController = (): [EventState, EventActions] => {
     [fetchEvents],
   );
 
+  /**
+   * Update data acara yang ada di Firestore
+   */
+  const updateEvent = useCallback(
+    async (
+      eventId: string,
+      updatedData: {
+        title: string;
+        category: EventCategory;
+        organizer: string;
+        date: number;
+        endDate?: number;
+        location: string;
+        description: string;
+        imageUrl: string;
+        images?: string[];
+      },
+    ): Promise<boolean> => {
+      try {
+        const db = getFirestore();
+        const eventRef = doc(db, 'events', eventId);
+
+        const images = updatedData.images && updatedData.images.length > 0
+          ? updatedData.images
+          : (updatedData.imageUrl ? [updatedData.imageUrl.trim()] : []);
+        const imageUrl = images[0] || updatedData.imageUrl.trim();
+
+        const eventPayload: Record<string, any> = {
+          title: updatedData.title.trim(),
+          category: updatedData.category,
+          organizer: updatedData.organizer.trim(),
+          date: Number(updatedData.date),
+          location: updatedData.location.trim(),
+          description: updatedData.description.trim(),
+          imageUrl,
+          images,
+          updatedAt: Date.now(),
+        };
+
+        if (updatedData.endDate && !isNaN(Number(updatedData.endDate))) {
+          eventPayload.endDate = Number(updatedData.endDate);
+        }
+
+        await setDoc(eventRef, eventPayload, { merge: true });
+
+        // Segarkan data acara
+        await fetchEvents();
+        return true;
+      } catch (err) {
+        console.error('[EventController] updateEvent error:', err);
+        return false;
+      }
+    },
+    [fetchEvents],
+  );
+
   const state: EventState = {
     events,
     filtered,
@@ -238,6 +321,7 @@ export const useEventController = (): [EventState, EventActions] => {
     onRefresh,
     applyFilter,
     addEvent,
+    updateEvent,
   };
 
   return [state, actions];

@@ -19,7 +19,7 @@ import {
   launchImageLibrary,
   ImagePickerResponse,
 } from 'react-native-image-picker';
-import { EventCategory, EVENT_CATEGORIES } from '../../models/Event.model';
+import { EventItem, EventCategory, EVENT_CATEGORIES } from '../../models/Event.model';
 import { Colors } from '../../../../shared/constants/colors';
 import { Fonts } from '../../../../shared/constants/fonts';
 import { uploadImageToCloudinary } from '../../../../shared/services/cloudinary.service';
@@ -37,7 +37,9 @@ interface Props {
     location: string;
     description: string;
     imageUrl: string;
+    images?: string[];
   }) => Promise<boolean>;
+  initialData?: EventItem | null;
 }
 
 const CATEGORY_OPTIONS = EVENT_CATEGORIES.filter(c => c !== 'Semua');
@@ -69,9 +71,14 @@ const MINUTE_OPTIONS = [
  * - Label / Judul di atas setiap kolom tanpa hint teks di dalam TextInput
  * - Popup kalender dan jam untuk tanggal & waktu dengan hint "--/--/----" dan "--:--" saat kosong
  * - Dropdown pilihan kategori acara dengan teks awal "Pilih kategori"
- * - Pemilihan foto satu tombol bersih langsung dari galeri HP (tanpa ikon)
+ * - Pemilihan foto multi-gambar langsung dari galeri HP
  */
-const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
+const AddEventModal: React.FC<Props> = ({
+  visible,
+  onClose,
+  onSubmit,
+  initialData,
+}) => {
   const insets = useSafeAreaInsets();
   const { t, translateCategory, currentLang } = useTranslation();
   const langKey = currentLang === 'id' ? 'id' : 'en';
@@ -92,8 +99,8 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
   const [endDateStr, setEndDateStr] = useState('');
   const [endTimeStr, setEndTimeStr] = useState('');
 
-  // Foto dari Galeri saja
-  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+  // Foto dari Galeri (bisa banyak foto)
+  const [selectedImageUris, setSelectedImageUris] = useState<string[]>([]);
 
   // Popup Date Picker State
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -111,6 +118,58 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
   const [submitting, setSubmitting] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    if (visible && initialData) {
+      setTitle(initialData.title || '');
+      setCategory((initialData.category as EventCategory) || '');
+      setDropdownOpen(false);
+      setOrganizer(initialData.organizer || '');
+      setLocation(initialData.location || '');
+      setDescription(initialData.description || '');
+      const initialImages =
+        Array.isArray(initialData.images) && initialData.images.length > 0
+          ? initialData.images
+          : initialData.imageUrl
+          ? [initialData.imageUrl]
+          : [];
+      setSelectedImageUris(initialImages);
+
+      if (initialData.date) {
+        const d = new Date(initialData.date);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        setStartDateStr(`${day}/${month}/${year}`);
+
+        const hour = String(d.getHours()).padStart(2, '0');
+        const minute = String(d.getMinutes()).padStart(2, '0');
+        setStartTimeStr(`${hour}:${minute}`);
+      } else {
+        setStartDateStr('');
+        setStartTimeStr('');
+      }
+
+      if (initialData.endDate) {
+        setHasEndDate(true);
+        const d = new Date(initialData.endDate);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        setEndDateStr(`${day}/${month}/${year}`);
+
+        const hour = String(d.getHours()).padStart(2, '0');
+        const minute = String(d.getMinutes()).padStart(2, '0');
+        setEndTimeStr(`${hour}:${minute}`);
+      } else {
+        setHasEndDate(false);
+        setEndDateStr('');
+        setEndTimeStr('');
+      }
+    } else if (visible && !initialData) {
+      resetForm();
+    }
+  }, [visible, initialData]);
 
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardDidShow', () =>
@@ -138,7 +197,7 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
     setHasEndDate(false);
     setEndDateStr('');
     setEndTimeStr('');
-    setSelectedImageUri(null);
+    setSelectedImageUris([]);
   };
 
   const forceClose = () => {
@@ -158,7 +217,7 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
       organizer.trim().length > 0 ||
       location.trim().length > 0 ||
       description.trim().length > 0 ||
-      selectedImageUri !== null ||
+      selectedImageUris.length > 0 ||
       startDateStr.trim().length > 0;
 
     if (isDirty) {
@@ -257,7 +316,7 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
     setTimePickerVisible(false);
   };
 
-  // Handler Galeri (Langsung Buka Galeri HP)
+  // Handler Galeri (Bisa memilih banyak foto)
   const handleSelectGalleryPhoto = () => {
     launchImageLibrary(
       {
@@ -265,6 +324,7 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
         quality: 0.8,
         maxWidth: 1024,
         maxHeight: 1024,
+        selectionLimit: 0,
       },
       handlePickerResponse,
     );
@@ -279,11 +339,15 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
       return;
     }
     if (response.assets && response.assets.length > 0) {
-      const uri = response.assets[0].uri;
-      if (uri) {
-        setSelectedImageUri(uri);
-      }
+      const newUris = response.assets
+        .map(a => a.uri)
+        .filter((u): u is string => Boolean(u));
+      setSelectedImageUris(prev => [...prev, ...newUris]);
     }
+  };
+
+  const handleRemoveImage = (indexToRemove: number) => {
+    setSelectedImageUris(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   // Helper konversi string DD/MM/YYYY atau YYYY-MM-DD dan HH:mm ke epoch
@@ -363,15 +427,23 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
 
     try {
       setSubmitting(true);
-      let uploadedImageUrl =
+      setUploadStatus(t.common.saving);
+
+      // Unggah semua foto baru ke Cloudinary secara paralel (foto lama remote http tidak diunggah ulang)
+      const uploadedImageUrls = await Promise.all(
+        selectedImageUris.map(async uri => {
+          if (uri.startsWith('http')) {
+            return uri;
+          }
+          return await uploadImageToCloudinary(uri);
+        }),
+      );
+
+      const primaryImageUrl =
+        uploadedImageUrls[0] ||
+        initialData?.imageUrl ||
         'https://images.unsplash.com/photo-1511578314322-379afb476865?w=600&auto=format&fit=crop&q=60';
 
-      if (selectedImageUri) {
-        setUploadStatus(t.addEvent.uploadingPhoto);
-        uploadedImageUrl = await uploadImageToCloudinary(selectedImageUri);
-      }
-
-      setUploadStatus(t.addEvent.savingEvent);
       const success = await onSubmit({
         title: title.trim(),
         category,
@@ -380,13 +452,14 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
         endDate: endTimestamp,
         location: location.trim(),
         description: description.trim(),
-        imageUrl: uploadedImageUrl,
+        imageUrl: primaryImageUrl,
+        images: uploadedImageUrls,
       });
 
       if (success) {
         Alert.alert(
-          t.addEvent.successTitle,
-          t.addEvent.successMessage,
+          t.common.success,
+          initialData ? t.events.editSuccess : t.addEvent.successMessage,
         );
         forceClose();
       } else {
@@ -418,7 +491,9 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
       >
         {/* Header */}
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
-          <Text style={styles.headerTitle}>{t.addEvent.title}</Text>
+          <Text style={styles.headerTitle}>
+            {initialData ? t.events.editEvent : t.addEvent.title}
+          </Text>
           <TouchableOpacity onPress={handleAttemptClose} style={styles.closeBtn}>
             <Text style={styles.closeText}>×</Text>
           </TouchableOpacity>
@@ -610,32 +685,60 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
             />
           </View>
 
-          {/* 7. Foto Acara (Langsung Pilih dari Galeri tanpa ikon) */}
+          {/* 7. Foto Acara (Multi-Foto Galeri) */}
           <View style={styles.formItem}>
-            <Text style={styles.fieldLabel}>{t.addEvent.photoLabel}</Text>
-            {selectedImageUri ? (
-              <View style={styles.imagePreviewBox}>
-                <Image
-                  source={{ uri: selectedImageUri }}
-                  style={styles.previewImage}
-                  resizeMode="cover"
-                />
-                <View style={styles.imageActionRow}>
+            <View style={styles.photoLabelRow}>
+              <Text style={styles.fieldLabel}>{t.addEvent.photoLabel}</Text>
+              {selectedImageUris.length > 0 && (
+                <Text style={styles.photoCountText}>
+                  {selectedImageUris.length} {t.events.summary || 'foto'}
+                </Text>
+              )}
+            </View>
+
+            {selectedImageUris.length > 0 ? (
+              <View style={styles.multiImageContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.multiImageScroll}
+                >
+                  {selectedImageUris.map((uri, index) => (
+                    <View key={`${uri}-${index}`} style={styles.multiImageCard}>
+                      <Image
+                        source={{ uri }}
+                        style={styles.multiImageThumb}
+                        resizeMode="cover"
+                      />
+                      {index === 0 && (
+                        <View style={styles.primaryBadge} pointerEvents="none">
+                          <Text style={styles.primaryBadgeText}>Utama</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.removeImageBadge}
+                        onPress={() => handleRemoveImage(index)}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={styles.removeImageBadgeText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+
+                  {/* Tombol Tambah Foto Lagi */}
                   <TouchableOpacity
-                    style={styles.changeImageBtn}
+                    style={styles.addMoreBtn}
                     onPress={handleSelectGalleryPhoto}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.changeImageText}>{t.addEvent.changePhoto}</Text>
+                    <Text style={styles.addMorePlus}>+</Text>
+                    <Text style={styles.addMoreText}>Tambah</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.removeImageBtn}
-                    onPress={() => setSelectedImageUri(null)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.removeImageText}>{t.addEvent.removePhoto}</Text>
-                  </TouchableOpacity>
-                </View>
+                </ScrollView>
+                <Text style={styles.multiImageHint}>
+                  * Foto pertama akan dijadikan sampul utama
+                </Text>
               </View>
             ) : (
               <TouchableOpacity
@@ -644,6 +747,7 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
                 activeOpacity={0.8}
               >
                 <Text style={styles.galleryUploadText}>{t.addEvent.galleryButton}</Text>
+                <Text style={styles.galleryUploadSubtext}>Bisa pilih lebih dari satu foto</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -677,9 +781,14 @@ const AddEventModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
             activeOpacity={0.85}
           >
             {submitting ? (
-              <ActivityIndicator size="small" color={Colors.white} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <ActivityIndicator size="small" color={Colors.white} />
+                <Text style={styles.submitBtnText}>{t.common.saving}</Text>
+              </View>
             ) : (
-              <Text style={styles.submitBtnText}>{t.addEvent.submitBtn}</Text>
+              <Text style={styles.submitBtnText}>
+                {initialData ? t.common.save : t.addEvent.submitBtn}
+              </Text>
             )}
           </TouchableOpacity>
 
@@ -1094,9 +1203,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
   },
+  photoLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  photoCountText: {
+    fontFamily: Fonts.medium,
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
   // Gallery Upload Button (No Icon)
   galleryUploadBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F8FAFC',
@@ -1104,53 +1223,103 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: '#CBD5E1',
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
   },
   galleryUploadText: {
     fontFamily: Fonts.semiBold,
     fontSize: 14,
     color: Colors.textSecondary,
   },
-  // Image Preview Box
-  imagePreviewBox: {
-    borderRadius: 14,
+  galleryUploadSubtext: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
+  // Multi Image Preview
+  multiImageContainer: {
+    marginTop: 2,
+  },
+  multiImageScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  multiImageCard: {
+    width: 96,
+    height: 96,
+    borderRadius: 12,
     overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
   },
-  previewImage: {
+  multiImageThumb: {
     width: '100%',
-    height: 160,
+    height: '100%',
   },
-  imageActionRow: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+  primaryBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
-  changeImageBtn: {
-    flex: 1,
-    paddingVertical: 10,
+  primaryBadgeText: {
+    fontFamily: Fonts.bold,
+    fontSize: 9,
+    color: Colors.white,
+  },
+  removeImageBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRightWidth: 1,
-    borderRightColor: '#E2E8F0',
   },
-  changeImageText: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 13,
-    color: Colors.primaryDark,
+  removeImageBadgeText: {
+    color: Colors.white,
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: 'bold',
   },
-  removeImageBtn: {
-    flex: 1,
-    paddingVertical: 10,
+  addMoreBtn: {
+    width: 96,
+    height: 96,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF2F2',
+    gap: 2,
   },
-  removeImageText: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 13,
-    color: Colors.danger,
+  addMorePlus: {
+    fontSize: 22,
+    color: Colors.textSecondary,
+    lineHeight: 24,
+  },
+  addMoreText: {
+    fontFamily: Fonts.medium,
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  multiImageHint: {
+    fontFamily: Fonts.regular,
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 6,
+    fontStyle: 'italic',
   },
   // Status Box & Submit
   statusBox: {

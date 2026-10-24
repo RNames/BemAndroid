@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.cardBg,
     borderRadius: 16,
-    marginBottom: 14,
+    marginBottom: 11,
     overflow: 'hidden',
     elevation: 3,
     shadowColor: '#000',
@@ -155,7 +155,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   info: {
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   name: {
     fontFamily: Fonts.bold,
@@ -169,7 +171,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     fontSize: 14,
     color: Colors.primary,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   stockRow: {
     flexDirection: 'row',

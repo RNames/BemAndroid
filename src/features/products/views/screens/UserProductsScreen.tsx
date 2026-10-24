@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import WhiteTopSafeArea from '../../../../shared/components/WhiteTopSafeArea';
 import { useProductController } from '../../controllers/product.controller';
 import { useAuthController } from '../../../auth/controllers/auth.controller';
 import { Product, ProductCategory } from '../../models/Product.model';
@@ -35,26 +36,45 @@ const UserProductsScreen: React.FC<Props> = ({ onBack, onSelectProduct }) => {
   const { t, translateCategory } = useTranslation();
   const [productState, productActions] = useProductController();
   const [authState] = useAuthController();
-  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedProductForEdit, setSelectedProductForEdit] = useState<Product | null>(null);
 
   const myProducts = productState.products.filter(
     p => p.createdBy === authState.user?.uid,
   );
 
-  const handleAddProductSubmit = async (newProductData: {
+  const handleOpenAddModal = () => {
+    setSelectedProductForEdit(null);
+    setModalVisible(true);
+  };
+
+  const handleOpenEditModal = (product: Product) => {
+    setSelectedProductForEdit(product);
+    setModalVisible(true);
+  };
+
+  const handleProductSubmit = async (productData: {
     name: string;
     category: ProductCategory;
     price: number;
     stock: number;
     description: string;
     imageUrl: string;
+    images?: string[];
     whatsappLink: string;
   }) => {
     if (!authState.user) {
       Alert.alert(t.common.notice, 'Please sign in to your account first.');
       return false;
     }
-    return await productActions.addProduct(newProductData, authState.user.uid);
+    if (selectedProductForEdit) {
+      return await productActions.updateProduct(
+        selectedProductForEdit.id,
+        productData,
+      );
+    } else {
+      return await productActions.addProduct(productData, authState.user.uid);
+    }
   };
 
   const renderProductItem = ({ item }: { item: Product }) => {
@@ -106,6 +126,14 @@ const UserProductsScreen: React.FC<Props> = ({ onBack, onSelectProduct }) => {
 
           <View style={styles.metaRow}>
             <Text style={styles.metaText}>{t.products.stock}: {item.stock} pcs</Text>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => handleOpenEditModal(item)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.editButtonText}>✏️ {t.common.edit}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableOpacity>
@@ -113,8 +141,8 @@ const UserProductsScreen: React.FC<Props> = ({ onBack, onSelectProduct }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor={Colors.white} barStyle="dark-content" />
+    <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.safeArea}>
+      <WhiteTopSafeArea />
 
       {/* ─── Top AppBar ──────────────────────────────── */}
       <View style={styles.appBar}>
@@ -143,7 +171,7 @@ const UserProductsScreen: React.FC<Props> = ({ onBack, onSelectProduct }) => {
 
         <TouchableOpacity
           style={styles.addBtn}
-          onPress={() => setAddModalVisible(true)}
+          onPress={handleOpenAddModal}
           activeOpacity={0.8}
         >
           <Text style={styles.addBtnText}>+ {t.common.all === 'All' ? 'Add' : 'Tambah'}</Text>
@@ -178,7 +206,7 @@ const UserProductsScreen: React.FC<Props> = ({ onBack, onSelectProduct }) => {
             </Text>
             <TouchableOpacity
               style={styles.emptyAddBtn}
-              onPress={() => setAddModalVisible(true)}
+              onPress={handleOpenAddModal}
               activeOpacity={0.85}
             >
               <Text style={styles.emptyAddBtnText}>{t.products.add}</Text>
@@ -188,9 +216,13 @@ const UserProductsScreen: React.FC<Props> = ({ onBack, onSelectProduct }) => {
       />
 
       <AddProductModal
-        visible={addModalVisible}
-        onClose={() => setAddModalVisible(false)}
-        onSubmit={handleAddProductSubmit}
+        visible={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setSelectedProductForEdit(null);
+        }}
+        onSubmit={handleProductSubmit}
+        initialData={selectedProductForEdit}
       />
     </SafeAreaView>
   );
@@ -284,7 +316,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: 14,
     padding: 12,
-    marginBottom: 10,
+    marginBottom: 11,
     borderWidth: 1,
     borderColor: '#F1F5F9',
     elevation: 1,
@@ -365,11 +397,26 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
   },
   metaText: {
     fontFamily: Fonts.regular,
     fontSize: 11,
     color: Colors.textSecondary,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  editButtonText: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 11,
+    color: Colors.primary,
   },
   emptyContainer: {
     alignItems: 'center',

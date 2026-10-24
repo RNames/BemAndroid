@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,18 @@ import {
   StatusBar,
   Linking,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import WhiteTopSafeArea from '../../../../shared/components/WhiteTopSafeArea';
 import { EventItem } from '../../models/Event.model';
 import { Colors } from '../../../../shared/constants/colors';
 import { Fonts } from '../../../../shared/constants/fonts';
 import { formatDateTime, formatEventSchedule } from '../../../../shared/utils/format.utils';
 import { useTranslation } from '../../../../shared/localization';
 import ArrowLeftIcon from '../../../../assets/icons/arrow_left.svg';
+
+const { width } = Dimensions.get('window');
 
 interface Props {
   event: EventItem;
@@ -26,7 +30,7 @@ interface Props {
 /**
  * EventDetailScreen View
  * Menampilkan detail lengkap satu acara desa:
- * - Foto banner besar & tombol back
+ * - Foto banner carousel (multi-gambar) & tombol back
  * - Kategori, Judul, Penyelenggara
  * - Jadwal lengkap (mulai & selesai)
  * - Lokasi + Tombol buka Google Maps
@@ -35,6 +39,15 @@ interface Props {
 const EventDetailScreen: React.FC<Props> = ({ event, onBack }) => {
   const insets = useSafeAreaInsets();
   const { t, translateCategory } = useTranslation();
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  // Backward compatibility: prioritaskan images array jika ada, jika tidak gunakan imageUrl
+  const eventImages: string[] =
+    Array.isArray(event.images) && event.images.length > 0
+      ? event.images
+      : event.imageUrl
+      ? [event.imageUrl]
+      : [];
 
   const handleOpenMaps = async () => {
     if (!event.location.trim()) {
@@ -52,8 +65,8 @@ const EventDetailScreen: React.FC<Props> = ({ event, onBack }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor={Colors.white} barStyle="dark-content" />
+    <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.safeArea}>
+      <WhiteTopSafeArea />
 
       {/* ─── Top Appbar Putih ────────────────────── */}
       <View style={styles.appBar}>
@@ -73,13 +86,58 @@ const EventDetailScreen: React.FC<Props> = ({ event, onBack }) => {
       </View>
 
       <ScrollView style={styles.scroll} bounces={false} showsVerticalScrollIndicator={false}>
-        {/* ─── Hero Image ──────────────────────────── */}
+        {/* ─── Hero Image Carousel ─────────────────── */}
         <View style={styles.heroContainer}>
-          <Image
-            source={{ uri: event.imageUrl }}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
+          {eventImages.length > 0 ? (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={e => {
+                const offsetX = e.nativeEvent.contentOffset.x;
+                const index = Math.round(offsetX / width);
+                setActiveImageIndex(index);
+              }}
+              style={styles.carouselScroll}
+            >
+              {eventImages.map((uri, index) => (
+                <Image
+                  key={`${uri}-${index}`}
+                  source={{ uri }}
+                  style={styles.heroImage}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={[styles.heroImage, styles.heroPlaceholder]}>
+              <Text style={styles.heroPlaceholderText}>🗓️</Text>
+            </View>
+          )}
+
+          {/* Dots Pagination */}
+          {eventImages.length > 1 && (
+            <View style={styles.paginationDots} pointerEvents="none">
+              {eventImages.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.dot,
+                    activeImageIndex === i ? styles.activeDot : styles.inactiveDot,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Counter Badge (1/3) */}
+          {eventImages.length > 1 && (
+            <View style={styles.imageCounterBadge} pointerEvents="none">
+              <Text style={styles.imageCounterText}>
+                {activeImageIndex + 1}/{eventImages.length}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* ─── Content Card ────────────────────────── */}
@@ -204,9 +262,57 @@ const styles = StyleSheet.create({
     height: 280,
     backgroundColor: '#0F172A',
   },
-  heroImage: {
+  carouselScroll: {
     width: '100%',
     height: '100%',
+  },
+  heroImage: {
+    width: width,
+    height: '100%',
+  },
+  heroPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  heroPlaceholderText: {
+    fontSize: 48,
+  },
+  paginationDots: {
+    position: 'absolute',
+    bottom: 38,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  activeDot: {
+    width: 20,
+    backgroundColor: Colors.white,
+  },
+  inactiveDot: {
+    width: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+  },
+  imageCounterBadge: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  imageCounterText: {
+    fontFamily: Fonts.medium,
+    color: Colors.white,
+    fontSize: 12,
   },
   contentCard: {
     flex: 1,

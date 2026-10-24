@@ -11,6 +11,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import WhiteTopSafeArea from '../../../../shared/components/WhiteTopSafeArea';
 import {
   getFirestore,
   collection,
@@ -167,8 +168,8 @@ const InboxScreen: React.FC<Props> = ({ onBack }) => {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor={Colors.white} barStyle="dark-content" />
+    <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.safeArea}>
+      <WhiteTopSafeArea />
 
       {/* ─── Top AppBar ──────────────────────────────── */}
       <View style={styles.appBar}>

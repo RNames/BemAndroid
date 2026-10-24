@@ -106,7 +106,7 @@ export const ProductGridSkeleton: React.FC<{ count?: number; paddingTop?: number
   return (
     <View style={[styles.productGridContainer, { paddingTop }]}>
       {items.map((_, index) => (
-        <View key={index} style={{ width: PRODUCT_CARD_WIDTH, marginBottom: 14 }}>
+        <View key={index} style={{ width: PRODUCT_CARD_WIDTH, marginBottom: 11 }}>
           <ProductCardSkeleton />
         </View>
       ))}

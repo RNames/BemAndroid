@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import WhiteTopSafeArea from '../../../../shared/components/WhiteTopSafeArea';
 import { useEventController } from '../../controllers/event.controller';
 import { useAuthController } from '../../../auth/controllers/auth.controller';
 import { EventItem, EventCategory } from '../../models/Event.model';
@@ -35,13 +36,24 @@ const UserEventsScreen: React.FC<Props> = ({ onBack, onSelectEvent }) => {
   const { t, translateCategory } = useTranslation();
   const [eventState, eventActions] = useEventController();
   const [authState] = useAuthController();
-  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedEventForEdit, setSelectedEventForEdit] = useState<EventItem | null>(null);
 
   const myEvents = eventState.events.filter(
     e => e.createdBy === authState.user?.uid,
   );
 
-  const handleAddEventSubmit = async (newEventData: {
+  const handleOpenAddModal = () => {
+    setSelectedEventForEdit(null);
+    setModalVisible(true);
+  };
+
+  const handleOpenEditModal = (event: EventItem) => {
+    setSelectedEventForEdit(event);
+    setModalVisible(true);
+  };
+
+  const handleEventSubmit = async (newEventData: {
     title: string;
     category: EventCategory;
     organizer: string;
@@ -50,12 +62,20 @@ const UserEventsScreen: React.FC<Props> = ({ onBack, onSelectEvent }) => {
     location: string;
     description: string;
     imageUrl: string;
+    images?: string[];
   }) => {
     if (!authState.user) {
       Alert.alert(t.common.notice, 'Please sign in to your account first.');
       return false;
     }
-    return await eventActions.addEvent(newEventData, authState.user.uid);
+    if (selectedEventForEdit) {
+      return await eventActions.updateEvent(
+        selectedEventForEdit.id,
+        newEventData,
+      );
+    } else {
+      return await eventActions.addEvent(newEventData, authState.user.uid);
+    }
   };
 
   const renderEventItem = ({ item }: { item: EventItem }) => {
@@ -107,17 +127,27 @@ const UserEventsScreen: React.FC<Props> = ({ onBack, onSelectEvent }) => {
             📅 {formatDateTime(item.date)}
           </Text>
 
-          <Text style={styles.eventLocation} numberOfLines={1}>
-            📍 {item.location || 'Dlemer Village'}
-          </Text>
+          <View style={styles.bottomRow}>
+            <Text style={styles.eventLocation} numberOfLines={1}>
+              📍 {item.location || 'Dlemer Village'}
+            </Text>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => handleOpenEditModal(item)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.editButtonText}>✏️ {t.common.edit}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor={Colors.white} barStyle="dark-content" />
+    <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.safeArea}>
+      <WhiteTopSafeArea />
 
       {/* ─── Top AppBar ──────────────────────────────── */}
       <View style={styles.appBar}>
@@ -146,7 +176,7 @@ const UserEventsScreen: React.FC<Props> = ({ onBack, onSelectEvent }) => {
 
         <TouchableOpacity
           style={styles.addBtn}
-          onPress={() => setAddModalVisible(true)}
+          onPress={handleOpenAddModal}
           activeOpacity={0.8}
         >
           <Text style={styles.addBtnText}>+ {t.common.all === 'All' ? 'Register' : 'Daftar'}</Text>
@@ -181,7 +211,7 @@ const UserEventsScreen: React.FC<Props> = ({ onBack, onSelectEvent }) => {
             </Text>
             <TouchableOpacity
               style={styles.emptyAddBtn}
-              onPress={() => setAddModalVisible(true)}
+              onPress={handleOpenAddModal}
               activeOpacity={0.85}
             >
               <Text style={styles.emptyAddBtnText}>{t.events.add}</Text>
@@ -191,9 +221,13 @@ const UserEventsScreen: React.FC<Props> = ({ onBack, onSelectEvent }) => {
       />
 
       <AddEventModal
-        visible={addModalVisible}
-        onClose={() => setAddModalVisible(false)}
-        onSubmit={handleAddEventSubmit}
+        visible={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setSelectedEventForEdit(null);
+        }}
+        onSubmit={handleEventSubmit}
+        initialData={selectedEventForEdit}
       />
     </SafeAreaView>
   );
@@ -367,10 +401,31 @@ const styles = StyleSheet.create({
     color: Colors.primaryDark,
     marginBottom: 2,
   },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
   eventLocation: {
     fontFamily: Fonts.regular,
     fontSize: 11,
     color: Colors.textSecondary,
+    flex: 1,
+    marginRight: 8,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  editButtonText: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 11,
+    color: Colors.primary,
   },
   emptyContainer: {
     alignItems: 'center',

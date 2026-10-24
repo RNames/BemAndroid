@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import WhiteTopSafeArea from '../../../../shared/components/WhiteTopSafeArea';
 import { Product } from '../../models/Product.model';
 import { Colors } from '../../../../shared/constants/colors';
 import { Fonts } from '../../../../shared/constants/fonts';
@@ -29,13 +30,23 @@ interface Props {
 /**
  * ProductDetailScreen View
  * Menampilkan detail lengkap satu produk:
- * - Hero image, nama, kategori, harga, stok, deskripsi
+ * - Hero image carousel (multi-gambar) / single image
+ * - Nama, kategori, harga, stok, deskripsi
  * - Tombol WhatsApp untuk menghubungi penjual
  */
 const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
   const insets = useSafeAreaInsets();
   const { t, translateCategory } = useTranslation();
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const isOutOfStock = product.stock <= 0;
+
+  // Backward compatibility: prioritaskan images array jika ada, jika tidak gunakan imageUrl
+  const productImages: string[] =
+    Array.isArray(product.images) && product.images.length > 0
+      ? product.images
+      : product.imageUrl
+      ? [product.imageUrl]
+      : [];
 
   const handleWhatsApp = async () => {
     const url = product.whatsappLink;
@@ -51,8 +62,8 @@ const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor={Colors.white} barStyle="dark-content" />
+    <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.safeArea}>
+      <WhiteTopSafeArea />
 
       {/* ─── Top Appbar Putih ────────────────────── */}
       <View style={styles.appBar}>
@@ -73,17 +84,62 @@ const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
 
       <ScrollView style={styles.scroll} bounces={false} showsVerticalScrollIndicator={false}>
 
-        {/* ─── Hero Image ──────────────────────────── */}
+        {/* ─── Hero Image Carousel ─────────────────── */}
         <View style={styles.heroContainer}>
-          <Image
-            source={{ uri: product.imageUrl }}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
+          {productImages.length > 0 ? (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={e => {
+                const offsetX = e.nativeEvent.contentOffset.x;
+                const index = Math.round(offsetX / width);
+                setActiveImageIndex(index);
+              }}
+              style={styles.carouselScroll}
+            >
+              {productImages.map((uri, index) => (
+                <Image
+                  key={`${uri}-${index}`}
+                  source={{ uri }}
+                  style={styles.heroImage}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={[styles.heroImage, styles.heroPlaceholder]}>
+              <Text style={styles.heroPlaceholderText}>📷</Text>
+            </View>
+          )}
+
+          {/* Dots Pagination */}
+          {productImages.length > 1 && (
+            <View style={styles.paginationDots} pointerEvents="none">
+              {productImages.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.dot,
+                    activeImageIndex === i ? styles.activeDot : styles.inactiveDot,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Counter Badge (1/3) */}
+          {productImages.length > 1 && (
+            <View style={styles.imageCounterBadge} pointerEvents="none">
+              <Text style={styles.imageCounterText}>
+                {activeImageIndex + 1}/{productImages.length}
+              </Text>
+            </View>
+          )}
 
           {/* Overlay Stok Habis */}
           {isOutOfStock && (
-            <View style={styles.outOfStockOverlay}>
+            <View style={styles.outOfStockOverlay} pointerEvents="none">
               <Text style={styles.outOfStockText}>{t.products.outOfStockBadge}</Text>
             </View>
           )}
@@ -108,9 +164,7 @@ const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
             <Text style={styles.priceValue}>{formatPrice(product.price)}</Text>
           </View>
 
-          <View style={styles.divider} />
-
-          {/* ─── Info Grid ───────────────────────── */}
+          {/* ─── Info Grid / Card ───────────────────────── */}
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>{t.products.stock}</Text>
@@ -118,12 +172,14 @@ const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
                 {isOutOfStock ? t.products.outOfStock : `${product.stock} pcs`}
               </Text>
             </View>
+            <View style={styles.infoDividerVertical} />
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>{t.products.category}</Text>
               <Text style={styles.infoValue} numberOfLines={2}>
                 {translateCategory(product.category)}
               </Text>
             </View>
+            <View style={styles.infoDividerVertical} />
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>{t.products.status}</Text>
               <Text style={[styles.infoValue, styles.infoValueGreen]}>
@@ -132,9 +188,7 @@ const ProductDetailScreen: React.FC<Props> = ({ product, onBack }) => {
             </View>
           </View>
 
-          <View style={styles.divider} />
-
-          {/* ─── Description ───────────────────────── */}
+          {/* ─── Description Card ───────────────────────── */}
           <View style={styles.descSection}>
             <Text style={styles.descTitle}>{t.products.description}</Text>
             <Text style={styles.descText}>
@@ -206,16 +260,71 @@ const styles = StyleSheet.create({
   },
   scroll: { flex: 1, backgroundColor: Colors.background },
 
-  // Hero
+  // Hero Carousel
   heroContainer: {
     width: '100%',
     height: width * 0.85,
     position: 'relative',
+    backgroundColor: '#0F172A',
   },
-  heroImage: { width: '100%', height: '100%' },
+  carouselScroll: {
+    width: '100%',
+    height: '100%',
+  },
+  heroImage: {
+    width: width,
+    height: '100%',
+  },
+  heroPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  heroPlaceholderText: {
+    fontSize: 48,
+  },
+  paginationDots: {
+    position: 'absolute',
+    bottom: 38,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  activeDot: {
+    width: 20,
+    backgroundColor: Colors.white,
+  },
+  inactiveDot: {
+    width: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+  },
+  imageCounterBadge: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  imageCounterText: {
+    fontFamily: Fonts.medium,
+    color: Colors.white,
+    fontSize: 12,
+  },
   outOfStockOverlay: {
     position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -256,7 +365,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     lineHeight: 32,
     letterSpacing: -0.5,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   priceBox: {
     flexDirection: 'row',
@@ -266,7 +375,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    marginBottom: 20,
+    marginBottom: 11,
     borderWidth: 1,
     borderColor: Colors.primaryBorder,
   },
@@ -275,7 +384,23 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: Colors.divider, marginVertical: 20 },
 
   // Info Grid
-  infoGrid: { flexDirection: 'row', justifyContent: 'space-around' },
+  infoGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 11,
+  },
+  infoDividerVertical: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#E2E8F0',
+  },
   infoItem: { alignItems: 'center', flex: 1, gap: 4 },
   infoIcon: { fontSize: 24, marginBottom: 4 },
   infoLabel: {
@@ -290,7 +415,14 @@ const styles = StyleSheet.create({
   infoValueGreen: { color: Colors.primary },
 
   // Description
-  descSection: { gap: 10 },
+  descSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 8,
+  },
   descTitle: { fontFamily: Fonts.bold, fontSize: 16, color: Colors.textPrimary },
   descText: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textSecondary, lineHeight: 22 },
 

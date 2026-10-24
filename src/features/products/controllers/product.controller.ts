@@ -51,9 +51,23 @@ export interface ProductActions {
       stock: number;
       description: string;
       imageUrl: string;
+      images?: string[];
       whatsappLink: string;
     },
     userUid: string,
+  ) => Promise<boolean>;
+  updateProduct: (
+    productId: string,
+    updatedData: {
+      name: string;
+      category: ProductCategory;
+      price: number;
+      stock: number;
+      description: string;
+      imageUrl: string;
+      images?: string[];
+      whatsappLink: string;
+    },
   ) => Promise<boolean>;
 }
 
@@ -78,19 +92,27 @@ export const useProductController = (): [ProductState, ProductActions] => {
       // ✅ Modular API v22 — tidak ada deprecation warning
       const db = getFirestore();
       const productsRef = collection(db, 'products');
-      const q = query(productsRef, where('approved', '==', true));
-      const snapshot = await getDocs(q);
+      const snapshot = await getDocs(productsRef);
 
-      const data: Product[] = snapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      })) as Product[];
+      const data: Product[] = snapshot.docs.map(docSnap => {
+        const raw = docSnap.data();
+        const images: string[] = Array.isArray(raw.images) && raw.images.length > 0
+          ? raw.images
+          : (raw.imageUrl ? [raw.imageUrl] : []);
+        const imageUrl: string = raw.imageUrl || images[0] || '';
+        return {
+          id: docSnap.id,
+          ...raw,
+          imageUrl,
+          images,
+        } as Product;
+      });
 
       cachedProducts = data;
       isProductsLoaded = true;
 
       setProducts(data);
-      setFiltered(data);
+      setFiltered(data.filter(p => p.approved));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Terjadi kesalahan';
       setError(message);
@@ -115,7 +137,7 @@ export const useProductController = (): [ProductState, ProductActions] => {
       category: ProductCategory,
       sortBy: ProductSortOption = 'newest',
     ) => {
-      let result = [...products];
+      let result = products.filter(p => p.approved);
 
       if (category !== 'Semua') {
         result = result.filter(p => p.category === category);
@@ -167,6 +189,7 @@ export const useProductController = (): [ProductState, ProductActions] => {
         stock: number;
         description: string;
         imageUrl: string;
+        images?: string[];
         whatsappLink: string;
       },
       userUid: string,
@@ -190,6 +213,13 @@ export const useProductController = (): [ProductState, ProductActions] => {
           )}`;
         }
 
+        const images = newProductData.images && newProductData.images.length > 0
+          ? newProductData.images
+          : (newProductData.imageUrl ? [newProductData.imageUrl.trim()] : []);
+        const imageUrl = images[0] ||
+          newProductData.imageUrl.trim() ||
+          'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60';
+
         const productPayload: Product = {
           id: docId,
           name: newProductData.name.trim(),
@@ -197,9 +227,8 @@ export const useProductController = (): [ProductState, ProductActions] => {
           price: Number(newProductData.price),
           stock: Number(newProductData.stock),
           description: newProductData.description.trim(),
-          imageUrl:
-            newProductData.imageUrl.trim() ||
-            'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60',
+          imageUrl,
+          images,
           whatsappLink: waLink,
           approved: false, // Menunggu persetujuan admin (pending review)
           createdAt: timestamp,
@@ -220,6 +249,68 @@ export const useProductController = (): [ProductState, ProductActions] => {
     [fetchProducts],
   );
 
+  /**
+   * Update data produk yang ada di Firestore
+   */
+  const updateProduct = useCallback(
+    async (
+      productId: string,
+      updatedData: {
+        name: string;
+        category: ProductCategory;
+        price: number;
+        stock: number;
+        description: string;
+        imageUrl: string;
+        images?: string[];
+        whatsappLink: string;
+      },
+    ): Promise<boolean> => {
+      try {
+        const db = getFirestore();
+        const productRef = doc(db, 'products', productId);
+
+        let waLink = updatedData.whatsappLink.trim();
+        if (waLink && !waLink.startsWith('http')) {
+          let cleanNum = waLink.replace(/\D/g, '');
+          if (cleanNum.startsWith('0')) {
+            cleanNum = '62' + cleanNum.slice(1);
+          }
+          waLink = `https://wa.me/${cleanNum}?text=Halo%2C+saya+tertarik+membeli+${encodeURIComponent(
+            updatedData.name,
+          )}`;
+        }
+
+        const images = updatedData.images && updatedData.images.length > 0
+          ? updatedData.images
+          : (updatedData.imageUrl ? [updatedData.imageUrl.trim()] : []);
+        const imageUrl = images[0] || updatedData.imageUrl.trim();
+
+        const updatePayload: Record<string, any> = {
+          name: updatedData.name.trim(),
+          category: updatedData.category,
+          price: Number(updatedData.price),
+          stock: Number(updatedData.stock),
+          description: updatedData.description.trim(),
+          imageUrl,
+          images,
+          whatsappLink: waLink,
+          updatedAt: Date.now(),
+        };
+
+        await setDoc(productRef, updatePayload, { merge: true });
+
+        // Segarkan list produk
+        await fetchProducts();
+        return true;
+      } catch (err) {
+        console.error('[ProductController] updateProduct error:', err);
+        return false;
+      }
+    },
+    [fetchProducts],
+  );
+
   const state: ProductState = {
     products,
     filtered,
@@ -233,6 +324,7 @@ export const useProductController = (): [ProductState, ProductActions] => {
     onRefresh,
     applyFilter,
     addProduct,
+    updateProduct,
   };
 
   return [state, actions];

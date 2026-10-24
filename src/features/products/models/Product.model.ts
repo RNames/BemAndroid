@@ -10,6 +10,7 @@ export interface Product {
   price: number;
   stock: number;
   imageUrl: string;
+  images?: string[];
   whatsappLink: string;
   approved: boolean;
   createdAt: number;

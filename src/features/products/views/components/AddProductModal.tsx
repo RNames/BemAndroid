@@ -16,11 +16,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  launchCamera,
   launchImageLibrary,
   ImagePickerResponse,
 } from 'react-native-image-picker';
-import { ProductCategory, PRODUCT_CATEGORIES } from '../../models/Product.model';
+import { Product, ProductCategory, PRODUCT_CATEGORIES } from '../../models/Product.model';
 import { Colors } from '../../../../shared/constants/colors';
 import { Fonts } from '../../../../shared/constants/fonts';
 import { uploadImageToCloudinary } from '../../../../shared/services/cloudinary.service';
@@ -36,38 +35,67 @@ interface Props {
     stock: number;
     description: string;
     imageUrl: string;
+    images?: string[];
     whatsappLink: string;
   }) => Promise<boolean>;
+  initialData?: Product | null;
 }
 
 const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.filter(c => c !== 'Semua');
 
 /**
- * AddProductModal
- * Modal form untuk menambahkan produk UMKM baru dengan dukungan multibahasa:
- * - Dukungan Kamera & Galeri Foto Produk
- * - Penanganan Safe Area Insets
- * - Perbaikan UX Back Button (menutup keyboard dahulu jika aktif)
- * - Pop-up konfirmasi pembatalan jika data sudah diisi
+ * AddProductModal Component
+ * Modal form untuk mendaftarkan/mengedit produk UMKM:
+ * - Mendukung multi-foto produk (galeri multi-selection & thumbnail preview)
+ * - Header dengan tombol close bulat
+ * - Label kolom yang seragam tanpa placeholder teks di input
+ * - Dropdown kategori produk interaktif dengan icon checkmark
+ * - Input box bernuansa #F8FAFC & border halus #E2E8F0
+ * - Tombol submit hijau di dalam scroll view
  */
-const AddProductModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
+const AddProductModal: React.FC<Props> = ({
+  visible,
+  onClose,
+  onSubmit,
+  initialData,
+}) => {
   const insets = useSafeAreaInsets();
   const { t, translateCategory } = useTranslation();
 
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<ProductCategory>('Makanan & Minuman');
+  const [category, setCategory] = useState<ProductCategory | ''>('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('1');
   const [whatsapp, setWhatsapp] = useState('');
-  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState('');
+  const [selectedImageUris, setSelectedImageUris] = useState<string[]>([]);
   const [description, setDescription] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
-  // Monitor status keyboard agar tombol Back Android hanya menurunkan keyboard
+  useEffect(() => {
+    if (visible && initialData) {
+      setName(initialData.name || '');
+      setCategory((initialData.category as ProductCategory) || '');
+      setPrice(initialData.price !== undefined ? String(initialData.price) : '');
+      setStock(initialData.stock !== undefined ? String(initialData.stock) : '1');
+      setWhatsapp(initialData.whatsappLink || '');
+      const initialImages =
+        Array.isArray(initialData.images) && initialData.images.length > 0
+          ? initialData.images
+          : initialData.imageUrl
+          ? [initialData.imageUrl]
+          : [];
+      setSelectedImageUris(initialImages);
+      setDescription(initialData.description || '');
+      setDropdownOpen(false);
+    } else if (visible && !initialData) {
+      resetForm();
+    }
+  }, [visible, initialData]);
+
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardDidShow', () =>
       setIsKeyboardVisible(true),
@@ -84,12 +112,12 @@ const AddProductModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
 
   const resetForm = () => {
     setName('');
-    setCategory('Makanan & Minuman');
+    setCategory('');
+    setDropdownOpen(false);
     setPrice('');
     setStock('1');
     setWhatsapp('');
-    setSelectedImageUri(null);
-    setImageUrl('');
+    setSelectedImageUris([]);
     setDescription('');
   };
 
@@ -98,7 +126,6 @@ const AddProductModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
     onClose();
   };
 
-  // Konfirmasi sebelum menutup form jika sudah ada isian data
   const handleAttemptClose = () => {
     if (isKeyboardVisible) {
       Keyboard.dismiss();
@@ -107,11 +134,11 @@ const AddProductModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
 
     const isFormDirty =
       name.trim().length > 0 ||
+      category !== '' ||
       price.trim().length > 0 ||
       whatsapp.trim().length > 0 ||
       description.trim().length > 0 ||
-      selectedImageUri !== null ||
-      imageUrl.trim().length > 0;
+      selectedImageUris.length > 0;
 
     if (isFormDirty) {
       Alert.alert(
@@ -127,20 +154,7 @@ const AddProductModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
     }
   };
 
-  // Handler Kamera
-  const handleTakeCameraPhoto = () => {
-    launchCamera(
-      {
-        mediaType: 'photo',
-        quality: 0.8,
-        maxWidth: 1024,
-        maxHeight: 1024,
-      },
-      handlePickerResponse,
-    );
-  };
-
-  // Handler Galeri
+  // Handler Pilih Foto dari Galeri (Bisa memilih banyak foto)
   const handleSelectGalleryPhoto = () => {
     launchImageLibrary(
       {
@@ -148,35 +162,44 @@ const AddProductModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
         quality: 0.8,
         maxWidth: 1024,
         maxHeight: 1024,
+        selectionLimit: 0,
       },
       handlePickerResponse,
     );
   };
 
-  const handlePickerResponse = (response: ImagePickerResponse) => {
-    if (response.didCancel) {
+  const handlePickerResponse = (res: ImagePickerResponse) => {
+    if (res.didCancel) return;
+    if (res.errorCode) {
+      Alert.alert(t.common.error, res.errorMessage || 'Failed to select photo.');
       return;
     }
-    if (response.errorCode) {
-      Alert.alert(t.common.error, response.errorMessage || t.editProfile.failedPhoto);
-      return;
-    }
-    if (response.assets && response.assets.length > 0) {
-      const uri = response.assets[0].uri;
-      if (uri) {
-        setSelectedImageUri(uri);
-        setImageUrl(''); // Clear manual URL jika memilih foto lokal
-      }
+    if (res.assets && res.assets.length > 0) {
+      const newUris = res.assets
+        .map(a => a.uri)
+        .filter((u): u is string => Boolean(u));
+      setSelectedImageUris(prev => [...prev, ...newUris]);
     }
   };
 
+  const handleRemoveImage = (indexToRemove: number) => {
+    setSelectedImageUris(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
   const handleSubmit = async () => {
+    Keyboard.dismiss();
+
     if (!name.trim()) {
       Alert.alert(t.addProduct.validationTitle, t.addProduct.validationName);
       return;
     }
 
-    if (!price.trim() || isNaN(Number(price)) || Number(price) < 0) {
+    if (!category) {
+      Alert.alert(t.addProduct.validationTitle, t.addProduct.validationCategory);
+      return;
+    }
+
+    if (!price.trim() || isNaN(Number(price)) || Number(price) <= 0) {
       Alert.alert(t.addProduct.validationTitle, t.addProduct.validationPrice);
       return;
     }
@@ -188,29 +211,38 @@ const AddProductModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
 
     try {
       setSubmitting(true);
-      let uploadedImageUrl = imageUrl.trim();
+      setUploadStatus(t.common.saving);
 
-      // Jika pengguna memilih gambar lokal dari kamera/galeri, unggah ke Cloudinary
-      if (selectedImageUri) {
-        setUploadStatus(t.addProduct.uploadingPhoto);
-        uploadedImageUrl = await uploadImageToCloudinary(selectedImageUri);
-      }
+      // Unggah semua foto baru ke Cloudinary secara paralel (foto lama remote http tidak diunggah ulang)
+      const uploadedImageUrls = await Promise.all(
+        selectedImageUris.map(async uri => {
+          if (uri.startsWith('http')) {
+            return uri;
+          }
+          return await uploadImageToCloudinary(uri);
+        }),
+      );
 
-      setUploadStatus(t.addProduct.savingProduct);
+      const primaryImageUrl =
+        uploadedImageUrls[0] ||
+        initialData?.imageUrl ||
+        '';
+
       const success = await onSubmit({
-        name,
+        name: name.trim(),
         category,
         price: Number(price),
         stock: Number(stock) || 0,
-        whatsappLink: whatsapp,
-        imageUrl: uploadedImageUrl,
-        description,
+        whatsappLink: whatsapp.trim(),
+        imageUrl: primaryImageUrl,
+        images: uploadedImageUrls,
+        description: description.trim(),
       });
 
       if (success) {
         Alert.alert(
-          t.addProduct.successTitle,
-          t.addProduct.successMessage,
+          t.common.success,
+          initialData ? t.products.editSuccess : t.addProduct.successMessage,
         );
         forceClose();
       } else {
@@ -236,154 +268,196 @@ const AddProductModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Header dengan Safe Area Top Inset */}
+        {/* Header (Sama dengan AddEventModal) */}
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
-          <Text style={styles.headerTitle}>{t.addProduct.title}</Text>
+          <Text style={styles.headerTitle}>
+            {initialData ? t.products.editProduct : t.addProduct.title}
+          </Text>
           <TouchableOpacity onPress={handleAttemptClose} style={styles.closeBtn}>
             <Text style={styles.closeText}>×</Text>
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Nama Produk */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>{t.addProduct.nameLabel}</Text>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* 1. Nama Produk */}
+          <View style={styles.formItem}>
+            <Text style={styles.fieldLabel}>{t.addProduct.nameLabel}</Text>
             <TextInput
               style={styles.input}
-              placeholder={t.addProduct.namePlaceholder}
-              placeholderTextColor={Colors.textMuted}
               value={name}
               onChangeText={setName}
             />
           </View>
 
-          {/* Kategori Selector */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>{t.addProduct.categoryLabel}</Text>
-            <View style={styles.categoryContainer}>
-              {CATEGORY_OPTIONS.map(cat => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[
-                    styles.categoryChip,
-                    category === cat && styles.categoryChipActive,
-                  ]}
-                  onPress={() => setCategory(cat)}
-                >
-                  <Text
-                    style={[
-                      styles.categoryChipText,
-                      category === cat && styles.categoryChipTextActive,
-                    ]}
-                  >
-                    {translateCategory(cat)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          {/* 2. Dropdown Kategori Produk */}
+          <View style={[styles.formItem, { zIndex: 100 }]}>
+            <Text style={styles.fieldLabel}>{t.addProduct.categoryLabel}</Text>
+            <TouchableOpacity
+              style={[
+                styles.dropdownTrigger,
+                dropdownOpen && styles.dropdownTriggerActive,
+              ]}
+              onPress={() => setDropdownOpen(prev => !prev)}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.dropdownValue,
+                  !category && styles.dropdownPlaceholder,
+                ]}
+              >
+                {category ? translateCategory(category) : t.addProduct.categoryPlaceholder}
+              </Text>
+              <Text style={styles.dropdownArrow}>{dropdownOpen ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+
+            {dropdownOpen && (
+              <View style={styles.dropdownMenu}>
+                {CATEGORY_OPTIONS.map((cat, idx) => {
+                  const isSelected = category === cat;
+                  const isLast = idx === CATEGORY_OPTIONS.length - 1;
+                  return (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[
+                        styles.dropdownItem,
+                        isSelected && styles.dropdownItemSelected,
+                        !isLast && styles.dropdownItemBorder,
+                      ]}
+                      onPress={() => {
+                        setCategory(cat);
+                        setDropdownOpen(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.dropdownItemText,
+                          isSelected && styles.dropdownItemTextSelected,
+                        ]}
+                      >
+                        {translateCategory(cat)}
+                      </Text>
+                      {isSelected && <Text style={styles.checkmarkIcon}>✓</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
+          {/* 3. Row Harga & Stok */}
+          <View style={styles.formItem}>
+            <View style={styles.row}>
+              <View style={{ flex: 1.2, marginRight: 8 }}>
+                <Text style={styles.fieldLabel}>{t.addProduct.priceLabel}</Text>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  value={price}
+                  onChangeText={setPrice}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>{t.addProduct.stockLabel}</Text>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  value={stock}
+                  onChangeText={setStock}
+                />
+              </View>
             </View>
           </View>
 
-          {/* Row Harga & Stok */}
-          <View style={styles.row}>
-            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>{t.addProduct.priceLabel}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t.addProduct.pricePlaceholder}
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="numeric"
-                value={price}
-                onChangeText={setPrice}
-              />
-            </View>
-
-            <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-              <Text style={styles.label}>{t.addProduct.stockLabel}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t.addProduct.stockPlaceholder}
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="numeric"
-                value={stock}
-                onChangeText={setStock}
-              />
-            </View>
-          </View>
-
-          {/* WhatsApp */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>{t.addProduct.whatsappLabel}</Text>
+          {/* 4. Nomor WhatsApp Penjual */}
+          <View style={styles.formItem}>
+            <Text style={styles.fieldLabel}>{t.addProduct.whatsappLabel}</Text>
             <TextInput
               style={styles.input}
-              placeholder={t.addProduct.whatsappPlaceholder}
-              placeholderTextColor={Colors.textMuted}
               keyboardType="phone-pad"
               value={whatsapp}
               onChangeText={setWhatsapp}
             />
           </View>
 
-          {/* Foto Produk Picker */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>{t.addProduct.photoLabel}</Text>
+          {/* 5. Foto Produk (Multi-Foto Galeri) */}
+          <View style={styles.formItem}>
+            <View style={styles.photoLabelRow}>
+              <Text style={styles.fieldLabel}>{t.addProduct.photoLabel}</Text>
+              {selectedImageUris.length > 0 && (
+                <Text style={styles.photoCountText}>
+                  {selectedImageUris.length} {t.products.summary || 'foto'}
+                </Text>
+              )}
+            </View>
 
-            {selectedImageUri ? (
-              <View style={styles.imagePreviewCard}>
-                <Image
-                  source={{ uri: selectedImageUri }}
-                  style={styles.imagePreview}
-                  resizeMode="cover"
-                />
-                <TouchableOpacity
-                  style={styles.removeImageBtn}
-                  onPress={() => setSelectedImageUri(null)}
+            {selectedImageUris.length > 0 ? (
+              <View style={styles.multiImageContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.multiImageScroll}
                 >
-                  <Text style={styles.removeImageText}>{t.addProduct.removePhoto}</Text>
-                </TouchableOpacity>
+                  {selectedImageUris.map((uri, index) => (
+                    <View key={`${uri}-${index}`} style={styles.multiImageCard}>
+                      <Image
+                        source={{ uri }}
+                        style={styles.multiImageThumb}
+                        resizeMode="cover"
+                      />
+                      {index === 0 && (
+                        <View style={styles.primaryBadge} pointerEvents="none">
+                          <Text style={styles.primaryBadgeText}>Utama</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.removeImageBadge}
+                        onPress={() => handleRemoveImage(index)}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={styles.removeImageBadgeText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+
+                  {/* Tombol Tambah Foto Lagi */}
+                  <TouchableOpacity
+                    style={styles.addMoreBtn}
+                    onPress={handleSelectGalleryPhoto}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.addMorePlus}>+</Text>
+                    <Text style={styles.addMoreText}>Tambah</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+                <Text style={styles.multiImageHint}>
+                  * Foto pertama akan dijadikan sampul utama
+                </Text>
               </View>
             ) : (
-              <View style={styles.pickerActionRow}>
-                <TouchableOpacity
-                  style={styles.pickerBtn}
-                  onPress={handleTakeCameraPhoto}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.pickerBtnText}>{t.addProduct.camera}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.pickerBtn}
-                  onPress={handleSelectGalleryPhoto}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.pickerBtnText}>{t.addProduct.gallery}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Direct Image URL Alternative */}
-            {!selectedImageUri && (
-              <View style={{ marginTop: 10 }}>
-                <Text style={styles.subLabel}>{t.addProduct.orPublicUrl}</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder={t.addProduct.urlPlaceholder}
-                  placeholderTextColor={Colors.textMuted}
-                  autoCapitalize="none"
-                  value={imageUrl}
-                  onChangeText={setImageUrl}
-                />
-              </View>
+              <TouchableOpacity
+                style={styles.galleryUploadBtn}
+                onPress={handleSelectGalleryPhoto}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.galleryUploadText}>{t.addProduct.galleryButton}</Text>
+                <Text style={styles.galleryUploadSubtext}>Bisa pilih lebih dari satu foto</Text>
+              </TouchableOpacity>
             )}
           </View>
 
-          {/* Description */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>{t.addProduct.descLabel}</Text>
+          {/* 6. Deskripsi Produk */}
+          <View style={styles.formItem}>
+            <Text style={styles.fieldLabel}>{t.addProduct.descLabel}</Text>
             <TextInput
-              style={[styles.input, styles.multilineInput]}
-              placeholder={t.addProduct.descPlaceholder}
-              placeholderTextColor={Colors.textMuted}
+              style={[styles.input, styles.textArea]}
               multiline
               numberOfLines={4}
               textAlignVertical="top"
@@ -392,29 +466,35 @@ const AddProductModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
             />
           </View>
 
-          <View style={{ height: 30 }} />
-        </ScrollView>
+          {/* Status Upload Info */}
+          {uploadStatus ? (
+            <View style={styles.statusBox}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.statusText}>{uploadStatus}</Text>
+            </View>
+          ) : null}
 
-        {/* Footer dengan Safe Area Bottom Inset */}
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 12, 20) }]}>
+          {/* Tombol Simpan (Sama dengan AddEventModal) */}
           <TouchableOpacity
-            style={styles.submitBtn}
+            style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
             onPress={handleSubmit}
             disabled={submitting}
             activeOpacity={0.85}
           >
             {submitting ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <ActivityIndicator color={Colors.white} size="small" />
-                <Text style={styles.submitBtnText}>
-                  {uploadStatus || t.common.loading}
-                </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <ActivityIndicator size="small" color={Colors.white} />
+                <Text style={styles.submitBtnText}>{t.common.saving}</Text>
               </View>
             ) : (
-              <Text style={styles.submitBtnText}>{t.addProduct.submitBtn}</Text>
+              <Text style={styles.submitBtnText}>
+                {initialData ? t.common.save : t.addProduct.submitBtn}
+              </Text>
             )}
           </TouchableOpacity>
-        </View>
+
+          <View style={{ height: insets.bottom + 40 }} />
+        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -423,7 +503,7 @@ const AddProductModal: React.FC<Props> = ({ visible, onClose, onSubmit }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.white,
   },
   header: {
     flexDirection: 'row',
@@ -431,9 +511,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingBottom: 16,
-    backgroundColor: Colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: Colors.white,
   },
   headerTitle: {
     fontFamily: Fonts.bold,
@@ -441,148 +521,282 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   closeBtn: {
-    padding: 6,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   closeText: {
     fontFamily: Fonts.bold,
-    fontSize: 18,
-    color: Colors.textMuted,
+    fontSize: 16,
+    color: Colors.textSecondary,
   },
   scroll: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
   },
-  formGroup: {
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+  },
+  formItem: {
     marginBottom: 16,
   },
-  label: {
-    fontFamily: Fonts.bold,
+  fieldLabel: {
+    fontFamily: Fonts.semiBold,
     fontSize: 13,
     color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  subLabel: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 11,
-    color: Colors.textSecondary,
     marginBottom: 6,
   },
   input: {
     fontFamily: Fonts.regular,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     fontSize: 14,
     color: Colors.textPrimary,
   },
-  multilineInput: {
-    minHeight: 90,
+  textArea: {
+    minHeight: 100,
   },
   row: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
   },
-  categoryContainer: {
+  // Dropdown Styles (Sama dengan AddEventModal)
+  dropdownTrigger: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
   },
-  categoryChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+  dropdownTriggerActive: {
+    borderColor: Colors.primary,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  dropdownValue: {
+    fontFamily: Fonts.medium,
+    fontSize: 14,
+    color: Colors.textPrimary,
+  },
+  dropdownPlaceholder: {
+    color: Colors.textMuted,
+  },
+  dropdownArrow: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginLeft: 8,
+  },
+  dropdownMenu: {
     backgroundColor: Colors.white,
     borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  categoryChipActive: {
-    backgroundColor: Colors.primary,
     borderColor: Colors.primary,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    overflow: 'hidden',
   },
-  categoryChipText: {
-    fontFamily: Fonts.semiBold,
+  dropdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  dropdownItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#F0FDF4',
+  },
+  dropdownItemText: {
+    fontFamily: Fonts.medium,
+    fontSize: 14,
+    color: Colors.textPrimary,
+  },
+  dropdownItemTextSelected: {
+    fontFamily: Fonts.bold,
+    color: Colors.primaryDark,
+  },
+  checkmarkIcon: {
+    fontFamily: Fonts.bold,
+    color: Colors.primary,
+    fontSize: 14,
+  },
+  photoLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  photoCountText: {
+    fontFamily: Fonts.medium,
     fontSize: 12,
+    color: Colors.textMuted,
+  },
+  // Gallery Upload Button (Dashed, no icon)
+  galleryUploadBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#CBD5E1',
+    borderRadius: 14,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+  },
+  galleryUploadText: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 14,
     color: Colors.textSecondary,
   },
-  categoryChipTextActive: {
+  galleryUploadSubtext: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
+  // Multi Image Preview
+  multiImageContainer: {
+    marginTop: 2,
+  },
+  multiImageScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  multiImageCard: {
+    width: 96,
+    height: 96,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  multiImageThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  primaryBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  primaryBadgeText: {
     fontFamily: Fonts.bold,
+    fontSize: 9,
     color: Colors.white,
   },
-  pickerActionRow: {
-    flexDirection: 'row',
-    gap: 12,
+  removeImageBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  pickerBtn: {
-    flex: 1,
+  removeImageBadgeText: {
+    color: Colors.white,
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: 'bold',
+  },
+  addMoreBtn: {
+    width: 96,
+    height: 96,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 2,
+  },
+  addMorePlus: {
+    fontSize: 22,
+    color: Colors.textSecondary,
+    lineHeight: 24,
+  },
+  addMoreText: {
+    fontFamily: Fonts.medium,
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  multiImageHint: {
+    fontFamily: Fonts.regular,
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  // Status Box
+  statusBox: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.white,
-    borderWidth: 1.5,
-    borderColor: Colors.primaryBorder,
-    borderRadius: 12,
-    paddingVertical: 12,
     gap: 8,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 12,
   },
-  pickerBtnIcon: {
-    fontSize: 18,
-  },
-  pickerBtnText: {
-    fontFamily: Fonts.bold,
+  statusText: {
+    fontFamily: Fonts.medium,
     fontSize: 13,
     color: Colors.primaryDark,
   },
-  imagePreviewCard: {
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  imagePreview: {
-    width: '100%',
-    height: 180,
-    borderRadius: 12,
-  },
-  removeImageBtn: {
-    marginTop: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: Colors.dangerLight,
-  },
-  removeImageText: {
-    fontFamily: Fonts.bold,
-    color: Colors.danger,
-    fontSize: 12,
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    backgroundColor: Colors.white,
-    borderTopWidth: 1,
-    borderTopColor: Colors.divider,
-  },
+  // Submit Button
   submitBtn: {
     backgroundColor: Colors.primary,
-    paddingVertical: 14,
     borderRadius: 14,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 3,
-    shadowColor: Colors.primary,
+    marginTop: 8,
+    elevation: 2,
+    shadowColor: Colors.primaryDark,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
+  },
+  submitBtnDisabled: {
+    opacity: 0.6,
   },
   submitBtnText: {
     fontFamily: Fonts.bold,
+    fontSize: 15,
     color: Colors.white,
-    fontSize: 16,
   },
 });
 

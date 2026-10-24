@@ -9,6 +9,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import WhiteTopSafeArea from '../../../../shared/components/WhiteTopSafeArea';
 import { useAuthController } from '../../controllers/auth.controller';
 import { Colors } from '../../../../shared/constants/colors';
 import { Fonts } from '../../../../shared/constants/fonts';
@@ -37,8 +38,8 @@ const AccountInfoScreen: React.FC<Props> = ({ onBack }) => {
   const lastLoginDate = userProfile?.lastLogin ? formatDate(userProfile.lastLogin) : '-';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor={Colors.white} barStyle="dark-content" />
+    <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.safeArea}>
+      <WhiteTopSafeArea />
 
       {/* ─── Top AppBar ──────────────────────────────── */}
       <View style={styles.appBar}>

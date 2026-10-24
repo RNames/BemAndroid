@@ -14,6 +14,7 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import WhiteTopSafeArea, { useTopInset } from '../../../../shared/components/WhiteTopSafeArea';
 import { Product, ProductCategory } from '../../models/Product.model';
 import { EventItem, EventCategory } from '../../../events/models/Event.model';
 import { useProductController, ProductSortOption } from '../../controllers/product.controller';
@@ -71,6 +72,7 @@ const HomeScreen: React.FC<Props> = ({
   onNavigateToLanguage,
 }) => {
   const insets = useSafeAreaInsets();
+  const topInset = useTopInset();
   const { t } = useTranslation();
   const [productState, productActions] = useProductController();
   const [eventState, eventActions] = useEventController();
@@ -196,6 +198,7 @@ const HomeScreen: React.FC<Props> = ({
     stock: number;
     description: string;
     imageUrl: string;
+    images?: string[];
     whatsappLink: string;
   }) => {
     if (!authState.user) {
@@ -214,6 +217,7 @@ const HomeScreen: React.FC<Props> = ({
     location: string;
     description: string;
     imageUrl: string;
+    images?: string[];
   }) => {
     if (!authState.user) {
       return false;
@@ -231,8 +235,8 @@ const HomeScreen: React.FC<Props> = ({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor={Colors.white} barStyle="dark-content" />
+    <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.safeArea}>
+      <WhiteTopSafeArea zIndex={100} elevation={0} />
 
       {/* ─── Top Header Section (Collapsing Appbar + Sticky Search Bar) ─── */}
       {activeTab === 'profile' ? (
@@ -243,7 +247,10 @@ const HomeScreen: React.FC<Props> = ({
         <Animated.View
           style={[
             styles.headerWrapper,
-            { transform: [{ translateY: headerTranslateY }] },
+            {
+              top: topInset,
+              transform: [{ translateY: headerTranslateY }],
+            },
           ]}
         >
           {/* 1. Appbar: Ter-scroll ke atas dan menghilang saat scroll ke bawah */}
@@ -356,7 +363,7 @@ const HomeScreen: React.FC<Props> = ({
             <ScrollView
               style={{ flex: 1 }}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingTop: TOTAL_HEADER_HEIGHT + 8 }}
+              contentContainerStyle={{ paddingTop: TOTAL_HEADER_HEIGHT + 6 }}
             >
               <ProductGridSkeleton paddingTop={0} count={6} />
             </ScrollView>
@@ -377,7 +384,7 @@ const HomeScreen: React.FC<Props> = ({
               contentContainerStyle={[
                 styles.productGrid,
                 {
-                  paddingTop: TOTAL_HEADER_HEIGHT + 8,
+                  paddingTop: TOTAL_HEADER_HEIGHT + 6,
                   paddingBottom: insets.bottom + 105,
                 },
               ]}
@@ -393,7 +400,7 @@ const HomeScreen: React.FC<Props> = ({
                   refreshing={productState.refreshing}
                   onRefresh={handleRefresh}
                   colors={[Colors.primary]}
-                  progressViewOffset={TOTAL_HEADER_HEIGHT + 10}
+                  progressViewOffset={TOTAL_HEADER_HEIGHT + 8}
                 />
               }
               renderItem={({ item }) => (
@@ -409,7 +416,7 @@ const HomeScreen: React.FC<Props> = ({
             <ScrollView
               style={{ flex: 1 }}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingTop: TOTAL_HEADER_HEIGHT + 8 }}
+              contentContainerStyle={{ paddingTop: TOTAL_HEADER_HEIGHT + 6 }}
             >
               <EventListSkeleton paddingTop={0} count={3} />
             </ScrollView>
@@ -429,7 +436,7 @@ const HomeScreen: React.FC<Props> = ({
               contentContainerStyle={[
                 styles.eventList,
                 {
-                  paddingTop: TOTAL_HEADER_HEIGHT + 8,
+                  paddingTop: TOTAL_HEADER_HEIGHT + 6,
                   paddingBottom: insets.bottom + 105,
                 },
               ]}
@@ -444,7 +451,7 @@ const HomeScreen: React.FC<Props> = ({
                   refreshing={eventState.refreshing}
                   onRefresh={handleRefresh}
                   colors={[Colors.primary]}
-                  progressViewOffset={TOTAL_HEADER_HEIGHT + 10}
+                  progressViewOffset={TOTAL_HEADER_HEIGHT + 8}
                 />
               }
               renderItem={({ item }) => (
@@ -625,16 +632,11 @@ const styles = StyleSheet.create({
   },
   headerWrapper: {
     position: 'absolute',
-    top: 0,
     left: 0,
     right: 0,
     zIndex: 10,
     backgroundColor: Colors.white,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 3,
+    elevation: 0,
   },
   header: {
     height: APPBAR_HEIGHT,
@@ -699,6 +701,8 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     backgroundColor: Colors.white,
     gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   searchBox: {
     flex: 1,
